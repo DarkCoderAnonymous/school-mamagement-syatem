@@ -8,8 +8,10 @@ import { TenantContext } from './context';
  *   injects `{ schoolId }` (as a filter or a leading $match stage) from the
  *   current AsyncLocalStorage tenant context, UNLESS the caller is
  *   SUPER_ADMIN (who is allowed to cross tenants).
- * - On every `save()` / `insertMany()` of a new document it stamps
- *   `schoolId` from context if not already set.
+ * - On every new document it OVERRIDES `schoolId` from the tenant context,
+ *   at `pre('validate')` time so the stamp lands before Mongoose's required
+ *   check, and again at `pre('save')` for writes that skip validation.
+ *   `insertMany` is covered separately, since it bypasses document middleware.
  * - It FAILS CLOSED: a tenant-scoped operation with no context at all throws
  *   instead of running unscoped. Trusted non-request code (seed, migrations,
  *   tests, jobs) opts out explicitly via `TenantContext.runAsSystem()`.
@@ -179,8 +181,22 @@ export function tenantPlugin(schema: Schema): void {
     next();
   });
 
+  /**
+   * Stamping runs on `pre('validate')`, NOT `pre('save')` (finding 5).
+   *
+   * Mongoose's order is pre('validate') → validate → pre('save') → save, and
+   * `schoolId` is `required` on every tenant schema. Stamping in pre('save')
+   * therefore ran *after* validation had already rejected the document, so
+   * the plugin's advertised "you don't need to pass schoolId" was fiction for
+   * every model except the nullable ones. Services were passing it by hand
+   * and the guarantee had never once fired.
+   *
+   * Registered on both hooks: validate is where it takes effect, and save
+   * covers `.save()` called with `{ validateBeforeSave: false }`, which skips
+   * validation entirely and would otherwise slip past.
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `this` is the document being saved, whose shape is only known to the schema this plugin is applied to
-  schema.pre('save', function (this: any, next: (err?: Error) => void) {
+  const stampTenant = function (this: any, next: (err?: Error) => void) {
     const ctx = TenantContext.get();
     if (!ctx) return next(noContextError('save'));
 
@@ -222,7 +238,10 @@ export function tenantPlugin(schema: Schema): void {
      */
     this.schoolId = new Types.ObjectId(ctx.schoolId);
     next();
-  });
+  };
+
+  schema.pre('validate', stampTenant);
+  schema.pre('save', stampTenant);
 
   /**
    * insertMany() bypasses document middleware entirely, so without this hook

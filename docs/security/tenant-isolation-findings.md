@@ -15,6 +15,7 @@ simplify one away.
 | 2 | Cross-tenant foreign keys accepted on write | **High** | No validation anywhere | Open |
 | 3 | `Teacher.employeeId` globally unique on a tenant collection | **Medium** | Model index | Open |
 | 4 | Unique indexes don't exclude soft-deleted rows | **Low** | Model indexes | Open |
+| 5 | The plugin never actually stamps `schoolId` on create | **Medium** | Plugin (hook ordering) | **Fixed** |
 
 ---
 
@@ -145,6 +146,40 @@ the model to follow.
 prompted by finding 3. Not by a failing probe — which is itself worth noting:
 the harness would not have caught this, because it never soft-deletes and then
 recreates. A probe for it was added as part of the fix.
+
+---
+
+## Finding 5 — the plugin never actually stamps `schoolId` on create
+
+**Severity: Medium.** Not a leak. A documented guarantee that does not exist,
+which is its own kind of danger.
+
+**Code path:** `backend/src/tenant/tenant.plugin.ts`, `pre('save')`.
+
+The plugin's contract, stated in its own header comment, is that a service
+inside a tenant context need not pass `schoolId` — the plugin injects it. That
+is false for every tenant model except `RefreshToken`.
+
+Mongoose runs document validation **before** `pre('save')` middleware
+(`pre('validate')` → validate → `pre('save')` → save). `schoolId` is `required`
+on every tenant schema, so a create that omits it fails validation with
+`Path 'schoolId' is required` before the stamping hook is ever reached.
+
+Nothing has broken so far only because every service passes `schoolId`
+explicitly — `actor.schoolId` in the academic-sessions service, `school._id` in
+the approval flow. The safety net has never been load-bearing; the services
+have been carrying it by hand while the comment said otherwise.
+
+Why this matters more than it looks: the next module written against the
+documented contract fails at runtime, and the obvious "fix" is to pass
+`schoolId` from the request — which is precisely the shape finding 1 made
+dangerous.
+
+**How it was found:** while fixing finding 2. The foreign-key probes began
+failing with `Path 'schoolId' is required` rather than the expected
+cross-tenant rejection, because those payloads were the first in the codebase
+to omit `schoolId` on a create. A probe written for one finding exposed
+another.
 
 ---
 

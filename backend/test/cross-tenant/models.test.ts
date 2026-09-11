@@ -79,6 +79,18 @@ describe('Cross-tenant · models (registry-driven)', () => {
       await asSystem(() => entry.model.deleteOne({ _id: created._id }));
     });
 
+    it('stamps schoolId on a create that omits it entirely', async () => {
+      // The plugin's documented contract: a service inside a tenant context
+      // should not have to pass schoolId by hand. If this fails with
+      // "schoolId is required", the stamp is running after validation and the
+      // contract is fiction — every service is silently carrying it instead.
+      const payload = await asSchool(fx.a, async () => entry.build(fx.a, `-omit-${Date.now()}`));
+      const created = await asSchool(fx.a, () => entry.model.create(payload));
+
+      expect(String(created.schoolId)).toBe(fx.a.schoolId);
+      await asSystem(() => entry.model.deleteOne({ _id: created._id }));
+    });
+
     it('finds nothing for a guessed id that belongs to no one', async () => {
       expect(await asSchool(fx.a, () => entry.model.findById(unknownId()).lean())).toBeNull();
     });
