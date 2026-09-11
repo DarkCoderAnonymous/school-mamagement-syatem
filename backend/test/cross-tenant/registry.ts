@@ -83,6 +83,12 @@ export interface TenantModelEntry {
   foreignKeys?: { field: string; refEntry: string }[];
   /** Skip the populate probe for models with no refs worth following. */
   populate?: { path: string; refEntry: string };
+  /**
+   * Unique indexes that are DELIBERATELY global rather than compound with
+   * schoolId. Each needs a reason: the default is that a global unique index
+   * on a tenant collection lets one school block another and leaks existence.
+   */
+  allowedGlobalUniqueIndexes?: { name: string; because: string }[];
 }
 
 export const TENANT_MODELS: TenantModelEntry[] = [
@@ -234,6 +240,15 @@ export const TENANT_MODELS: TenantModelEntry[] = [
       expiresAt: new Date(Date.now() + 86_400_000),
     }),
     mutation: { revokedAt: new Date() },
+    allowedGlobalUniqueIndexes: [
+      {
+        name: 'tokenHash_1',
+        because:
+          'Refresh tokens are looked up by hash alone, before any tenant context exists ' +
+          '(auth.service refreshUnscoped). A hash that collided across schools would be a ' +
+          'genuine ambiguity, so global uniqueness is the correct constraint here.',
+      },
+    ],
   },
 ];
 

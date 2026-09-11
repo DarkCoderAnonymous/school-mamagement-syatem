@@ -13,7 +13,7 @@ simplify one away.
 | --- | --- | --- | --- | --- |
 | 1 | `create()` trusts a caller-supplied `schoolId` | **Critical** | Plugin (`pre('save')`) | **Fixed** |
 | 2 | Cross-tenant foreign keys accepted on write | **High** | No validation anywhere | **Fixed (creates/saves)** |
-| 3 | `Teacher.employeeId` globally unique on a tenant collection | **Medium** | Model index | Open |
+| 3 | `Teacher.employeeId` globally unique on a tenant collection | **Medium** | Model index | **Fixed** |
 | 4 | Unique indexes don't exclude soft-deleted rows | **Low** | Model indexes | Open |
 | 5 | The plugin never actually stamps `schoolId` on create | **Medium** | Plugin (hook ordering) | **Fixed** |
 
@@ -128,6 +128,18 @@ in `CLAUDE.md` ("Unique indexes must be compound with `schoolId`").
 Consequences: School A claiming an `employeeId` prevents School B from using
 it, and the resulting `E11000` tells School B that *someone else* holds that
 id — an existence oracle across a tenant boundary.
+
+**Fix:** replaced with a compound `{ schoolId, employeeId }` unique index,
+partial-filtered on `deletedAt: null`. The harness gained a probe that reads
+each model's real indexes via `listIndexes()` and fails any unique index not
+led by `schoolId`.
+
+One deliberate exception is declared in the registry rather than excluded from
+the rule: `RefreshToken.tokenHash` is global on purpose — refresh tokens are
+looked up by hash alone, before any tenant context exists, so a hash colliding
+across schools would be a genuine ambiguity. The registry records the reason
+next to the exemption, so the next reader sees why instead of assuming an
+oversight.
 
 **How it was found:** indirectly, and worth recording. The `populate` probe for
 `teacher` failed while the equivalent probes for `class`, `section` and

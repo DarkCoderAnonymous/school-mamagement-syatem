@@ -91,6 +91,32 @@ describe('Cross-tenant · models (registry-driven)', () => {
       await asSystem(() => entry.model.deleteOne({ _id: created._id }));
     });
 
+    it('has no unique index that spans schools', async () => {
+      /**
+       * A bare `unique: true` builds a GLOBAL index. On a tenant collection
+       * that lets one school's value block another's, and the resulting
+       * E11000 tells the loser that somebody else holds it — an existence
+       * oracle across a tenant boundary. Every unique index on a tenant model
+       * must lead with schoolId.
+       */
+      // listIndexes() rather than raw driver access, which the project's own
+      // ESLint rule blocks and which this suite exists partly to discourage.
+      const indexes = (await asSystem(() => entry.model.listIndexes())) as {
+        name: string;
+        key: Record<string, number>;
+        unique?: boolean;
+      }[];
+
+      const allowed = new Set((entry.allowedGlobalUniqueIndexes ?? []).map((a) => a.name));
+      const offenders = indexes
+        .filter((ix) => ix.unique && ix.name !== '_id_')
+        .filter((ix) => !Object.keys(ix.key).includes('schoolId'))
+        .map((ix) => ix.name)
+        .filter((indexName) => !allowed.has(indexName));
+
+      expect(offenders).toEqual([]);
+    });
+
     it('finds nothing for a guessed id that belongs to no one', async () => {
       expect(await asSchool(fx.a, () => entry.model.findById(unknownId()).lean())).toBeNull();
     });
