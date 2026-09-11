@@ -71,8 +71,9 @@ describe('Cross-tenant · models (registry-driven)', () => {
     });
 
     it('stamps its own schoolId on create, ignoring a forged one', async () => {
+      const payload = await asSchool(fx.a, async () => entry.build(fx.a, '-forged'));
       const created = await asSchool(fx.a, () =>
-        entry.model.create({ ...entry.build(fx.a, '-forged'), schoolId: fx.b.schoolId }),
+        entry.model.create({ ...payload, schoolId: fx.b.schoolId }),
       );
       expect(String(created.schoolId)).toBe(fx.a.schoolId);
       await asSystem(() => entry.model.deleteOne({ _id: created._id }));

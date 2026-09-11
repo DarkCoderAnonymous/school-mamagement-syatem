@@ -13,7 +13,35 @@ import { Section } from '../../src/models/Section';
 import { Student } from '../../src/models/Student';
 import { Subject } from '../../src/models/Subject';
 import { Teacher } from '../../src/models/Teacher';
+import { User } from '../../src/models/User';
+import { TenantContext } from '../../src/tenant/context';
 import type { SchoolFixture } from './fixture';
+
+/** A person who exists but belongs to no school — for membership probes. */
+async function freshUserId(seed: string): Promise<string> {
+  const user = await TenantContext.runAsSystem(async () =>
+    User.create({
+      email: `probe-${seed}-${Date.now()}@xtenant.test`.toLowerCase(),
+      passwordHash: 'x'.repeat(20),
+      firstName: 'Probe',
+      lastName: 'Person',
+      status: 'ACTIVE',
+    }),
+  );
+  return String(user._id);
+}
+
+/** A second Employee inside `school`, for probes that need an unused employeeId. */
+async function freshEmployeeId(school: SchoolFixture, seed: string): Promise<string> {
+  const employee = await Employee.create({
+    schoolId: school.schoolId,
+    userId: school.adminUserId,
+    employeeNumber: `EMP-${school.label}-${seed}-${Date.now()}`,
+    designation: 'Probe',
+    joiningDate: new Date('2025-01-01'),
+  });
+  return String(employee._id);
+}
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -42,7 +70,10 @@ export interface TenantModelEntry {
    * that create a second record would otherwise fail on a duplicate key and
    * pass for entirely the wrong reason.
    */
-  build: (school: SchoolFixture, seed: string) => Record<string, unknown>;
+  build: (
+    school: SchoolFixture,
+    seed: string,
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>;
   /** A harmless field a cross-tenant write would try to change. */
   mutation: Record<string, unknown>;
   /**
@@ -120,7 +151,13 @@ export const TENANT_MODELS: TenantModelEntry[] = [
   {
     name: 'teacher',
     model: Teacher,
-    build: (s, seed) => ({ employeeId: s.ids.employee, qualification: `MSc ${s.label}${seed}` }),
+    // employeeId is unique, so a seeded probe must bring its own Employee —
+    // reusing the fixture's collides on the index and the probe would then
+    // fail for a reason unrelated to tenancy.
+    build: async (s, seed) => ({
+      employeeId: seed ? await freshEmployeeId(s, seed) : s.ids.employee,
+      qualification: `MSc ${s.label}${seed}`,
+    }),
     mutation: { qualification: 'HIJACKED' },
     foreignKeys: [{ field: 'employeeId', refEntry: 'employee' }],
     populate: { path: 'employeeId', refEntry: 'employee' },
@@ -179,7 +216,13 @@ export const TENANT_MODELS: TenantModelEntry[] = [
     model: SchoolMembership,
     // Provisioned by the approval flow; the fixture reuses the existing row
     // rather than creating a second membership for the same user.
-    build: (s, _seed) => ({ userId: s.adminUserId, roleIds: [], status: 'INVITED' }),
+    // Unique on (userId, schoolId): a seeded probe needs a different person,
+    // otherwise it collides with the membership the approval flow created.
+    build: async (s, seed) => ({
+      userId: seed ? await freshUserId(seed) : s.adminUserId,
+      roleIds: [],
+      status: 'INVITED',
+    }),
     mutation: { status: 'DISABLED' },
   },
   {

@@ -25,7 +25,7 @@ export async function seedRegistryData(school: SchoolFixture): Promise<void> {
     }
 
     const created = await asSchool(school, async () =>
-      entry.model.create({ ...entry.build(school, ''), schoolId: school.schoolId }),
+      entry.model.create({ ...(await entry.build(school, '')), schoolId: school.schoolId }),
     );
     school.ids[entry.name] = String(created._id);
   }

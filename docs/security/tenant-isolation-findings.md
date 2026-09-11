@@ -11,7 +11,7 @@ simplify one away.
 
 | # | Finding | Severity | Layer | Status |
 | --- | --- | --- | --- | --- |
-| 1 | `create()` trusts a caller-supplied `schoolId` | **Critical** | Plugin (`pre('save')`) | Open |
+| 1 | `create()` trusts a caller-supplied `schoolId` | **Critical** | Plugin (`pre('save')`) | **Fixed** |
 | 2 | Cross-tenant foreign keys accepted on write | **High** | No validation anywhere | Open |
 | 3 | `Teacher.employeeId` globally unique on a tenant collection | **Medium** | Model index | Open |
 | 4 | Unique indexes don't exclude soft-deleted rows | **Low** | Model indexes | Open |

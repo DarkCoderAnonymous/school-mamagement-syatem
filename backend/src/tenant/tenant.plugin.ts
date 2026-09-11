@@ -185,26 +185,42 @@ export function tenantPlugin(schema: Schema): void {
     if (!ctx) return next(noContextError('save'));
 
     // schoolId is required (non-nullable) on most tenant schemas, but a
-    // handful (User, RefreshToken) explicitly allow null to support
-    // platform-only SUPER_ADMIN accounts — see those models' overrides.
+    // handful (RefreshToken) explicitly allow null to support platform-only
+    // SUPER_ADMIN sessions — see those models' overrides.
     const schoolIdIsRequired = Boolean(schema.path('schoolId')?.isRequired);
 
-    if (this.isNew && !this.schoolId) {
-      if (ctx.isSuperAdmin) {
-        if (schoolIdIsRequired) {
-          // SUPER_ADMIN must explicitly set schoolId when creating tenant
-          // docs (e.g. register-school flow) — we don't guess it for them.
-          return next(new Error('SUPER_ADMIN must explicitly set schoolId when creating tenant documents'));
-        }
-        // Nullable schema (e.g. a platform-only SUPER_ADMIN's own User /
-        // RefreshToken) — leave schoolId as null, nothing to inject.
-        return next();
+    if (!this.isNew) return next();
+
+    if (ctx.isSuperAdmin) {
+      if (!this.schoolId && schoolIdIsRequired) {
+        // SUPER_ADMIN must explicitly set schoolId when creating tenant
+        // docs (e.g. register-school flow) — we don't guess it for them.
+        return next(new Error('SUPER_ADMIN must explicitly set schoolId when creating tenant documents'));
       }
-      if (!ctx.schoolId) {
-        return next(new Error('Tenant context missing schoolId for document creation'));
-      }
-      this.schoolId = new Types.ObjectId(ctx.schoolId);
+      // Whatever they set stands: crossing tenants is their prerogative, and
+      // the crossing is audit-logged by the calling service.
+      return next();
     }
+
+    if (!ctx.schoolId) {
+      return next(new Error('Tenant context missing schoolId for document creation'));
+    }
+
+    /**
+     * OVERRIDE, never defer (finding 1 in docs/security/tenant-isolation-findings.md).
+     *
+     * This used to stamp only when `schoolId` was absent, which meant a
+     * document arriving with one already set kept it — including another
+     * school's. `Model.create({ ...body, schoolId: <other school> })` inside
+     * an ordinary request wrote a row owned by that other school.
+     *
+     * That was the exact inverse of the query middleware above, which
+     * replaces a caller-supplied schoolId rather than trusting it. Reads and
+     * writes now agree: for a non-super-admin, the tenant context is the only
+     * thing that decides ownership. Passing your own schoolId stays a no-op;
+     * passing anyone else's is silently corrected rather than honoured.
+     */
+    this.schoolId = new Types.ObjectId(ctx.schoolId);
     next();
   });
 

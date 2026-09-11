@@ -288,7 +288,10 @@ describe('Cross-tenant · plugin bypasses', () => {
       ),
     )('%s rejects a reference to the other school', async (label, entry, fk) => {
       const seed = `-fk-${label.replace(/\W/g, '')}-${Date.now()}`;
-      const payload = { ...entry.build(fx.a, seed), [fk.field]: fx.b.ids[fk.refEntry] };
+      const payload = {
+        ...(await asSchool(fx.a, async () => entry.build(fx.a, seed))),
+        [fk.field]: fx.b.ids[fk.refEntry],
+      };
 
       await expect(asSchool(fx.a, () => entry.model.create(payload))).rejects.toThrow(
         /another school|cross-tenant|does not belong/i,
