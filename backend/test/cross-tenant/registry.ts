@@ -89,6 +89,8 @@ export interface TenantModelEntry {
    * on a tenant collection lets one school block another and leaks existence.
    */
   allowedGlobalUniqueIndexes?: { name: string; because: string }[];
+  /** Reason this model's unique values genuinely cannot be reused after a soft delete. */
+  uniqueValueReuseNotApplicable?: string;
 }
 
 export const TENANT_MODELS: TenantModelEntry[] = [
@@ -240,6 +242,9 @@ export const TENANT_MODELS: TenantModelEntry[] = [
       expiresAt: new Date(Date.now() + 86_400_000),
     }),
     mutation: { revokedAt: new Date() },
+    uniqueValueReuseNotApplicable:
+      'A refresh token hash is a random 48-byte secret and is never reissued. Sessions end ' +
+      'via revokedAt, not soft delete, so there is no value to reuse.',
     allowedGlobalUniqueIndexes: [
       {
         name: 'tokenHash_1',

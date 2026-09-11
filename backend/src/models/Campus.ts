@@ -8,7 +8,9 @@ const campusSchema = createTenantSchema({
   isMain: { type: Boolean, default: false },
 });
 
-campusSchema.index({ schoolId: 1, name: 1 }, { unique: true });
+// Partial-filtered so a soft-deleted row stops occupying the key: deletes are
+// soft, so without this the value could never be reused (CLAUDE.md).
+campusSchema.index({ schoolId: 1, name: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
 
 export type CampusDoc = InferSchemaType<typeof campusSchema>;
 export const Campus = model('Campus', campusSchema);

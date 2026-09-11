@@ -33,7 +33,12 @@ const studentSchema = createTenantSchema({
   status: { type: String, enum: ['ACTIVE', 'INACTIVE', 'GRADUATED', 'TRANSFERRED'], default: 'ACTIVE' },
 });
 
-studentSchema.index({ schoolId: 1, admissionNumber: 1 }, { unique: true });
+// Partial-filtered so a soft-deleted row stops occupying the key: deletes are
+// soft, so without this the value could never be reused (CLAUDE.md).
+studentSchema.index(
+  { schoolId: 1, admissionNumber: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
 studentSchema.index({ schoolId: 1, classId: 1, sectionId: 1 });
 
 export type StudentDoc = InferSchemaType<typeof studentSchema>;

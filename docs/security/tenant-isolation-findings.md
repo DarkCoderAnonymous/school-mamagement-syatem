@@ -14,7 +14,7 @@ simplify one away.
 | 1 | `create()` trusts a caller-supplied `schoolId` | **Critical** | Plugin (`pre('save')`) | **Fixed** |
 | 2 | Cross-tenant foreign keys accepted on write | **High** | No validation anywhere | **Fixed (creates/saves)** |
 | 3 | `Teacher.employeeId` globally unique on a tenant collection | **Medium** | Model index | **Fixed** |
-| 4 | Unique indexes don't exclude soft-deleted rows | **Low** | Model indexes | Open |
+| 4 | Unique indexes don't exclude soft-deleted rows | **Low** | Model indexes | **Fixed** |
 | 5 | The plugin never actually stamps `schoolId` on create | **Medium** | Plugin (hook ordering) | **Fixed** |
 
 ---
@@ -172,10 +172,23 @@ likely to be reissued.
 `SchoolMembership` and `SchoolRegistration` already do this correctly and are
 the model to follow.
 
-**How it was found:** an audit of every `unique` declaration across the models,
-prompted by finding 3. Not by a failing probe — which is itself worth noting:
-the harness would not have caught this, because it never soft-deletes and then
-recreates. A probe for it was added as part of the fix.
+**Fix:** `partialFilterExpression: { deletedAt: null }` added to all eight.
+`RefreshToken.tokenHash` is exempted in the registry with its reason: the hash
+is a random 48-byte secret that is never reissued, and sessions end via
+`revokedAt` rather than soft delete, so there is no value to reuse.
+
+**DEPLOYMENT NOTE.** Changing an index definition does not rebuild it on an
+existing database — MongoDB keeps the old spec, and Mongoose's `autoIndex`
+will not replace an index that already exists under the same name. Any
+environment created before this change needs `Model.syncIndexes()` (or a
+manual drop and recreate) or it keeps the un-filtered constraint and the bug.
+Fresh databases, including the test suite's, are unaffected.
+
+**How it was found:** an audit of every `unique` declaration, prompted by
+finding 3 — not by a failing probe. That is the part worth remembering: the
+harness would never have caught this, because nothing in it soft-deleted a
+record and then recreated it. A probe that does exactly that was added with
+the fix, and is now part of the standard battery every registered model gets.
 
 ---
 

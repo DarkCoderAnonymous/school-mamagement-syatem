@@ -117,6 +117,31 @@ describe('Cross-tenant · models (registry-driven)', () => {
       expect(offenders).toEqual([]);
     });
 
+    it('lets a soft-deleted record\'s unique value be reused', async () => {
+      /**
+       * Deletes are soft, so the row survives and keeps occupying its unique
+       * key unless the index excludes it. Without a partial filter, archiving
+       * a session named "2025-2026" burns that name forever — likewise
+       * admission numbers, employee numbers and subject codes, which are
+       * exactly the identifiers schools expect to reissue.
+       */
+      if (entry.uniqueValueReuseNotApplicable) return;
+
+      const seed = `-reuse-${Date.now()}`;
+      const payload = await asSchool(fx.a, async () => entry.build(fx.a, seed));
+
+      const first = await asSchool(fx.a, () => entry.model.create(payload));
+      await asSchool(fx.a, () =>
+        entry.model.updateOne({ _id: first._id }, { $set: { deletedAt: new Date() } }),
+      );
+
+      // The same values again: must be accepted now the original is archived.
+      const second = await asSchool(fx.a, () => entry.model.create(payload));
+      expect(String(second._id)).not.toBe(String(first._id));
+
+      await asSystem(() => entry.model.deleteMany({ _id: { $in: [first._id, second._id] } }));
+    });
+
     it('finds nothing for a guessed id that belongs to no one', async () => {
       expect(await asSchool(fx.a, () => entry.model.findById(unknownId()).lean())).toBeNull();
     });

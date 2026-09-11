@@ -9,7 +9,12 @@ const academicSessionSchema = createTenantSchema({
   isCurrent: { type: Boolean, default: false },
 });
 
-academicSessionSchema.index({ schoolId: 1, name: 1 }, { unique: true });
+// Partial-filtered so a soft-deleted row stops occupying the key: deletes are
+// soft, so without this the value could never be reused (CLAUDE.md).
+academicSessionSchema.index(
+  { schoolId: 1, name: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
 // Every list query filters on schoolId + deletedAt and sorts by start date,
 // and "which session is current" is read on nearly every screen — both get a
 // compound index led by schoolId, per CLAUDE.md.

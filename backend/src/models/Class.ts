@@ -9,7 +9,12 @@ const classSchema = createTenantSchema({
   order: { type: Number, default: 0 },
 });
 
-classSchema.index({ schoolId: 1, academicSessionId: 1, name: 1 }, { unique: true });
+// Partial-filtered so a soft-deleted row stops occupying the key: deletes are
+// soft, so without this the value could never be reused (CLAUDE.md).
+classSchema.index(
+  { schoolId: 1, academicSessionId: 1, name: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
 
 export type ClassDoc = InferSchemaType<typeof classSchema>;
 export const Class = model('Class', classSchema);

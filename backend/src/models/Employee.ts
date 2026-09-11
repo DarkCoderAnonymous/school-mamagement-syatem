@@ -11,7 +11,12 @@ const employeeSchema = createTenantSchema({
   status: { type: String, enum: ['ACTIVE', 'ON_LEAVE', 'TERMINATED'], default: 'ACTIVE' },
 });
 
-employeeSchema.index({ schoolId: 1, employeeNumber: 1 }, { unique: true });
+// Partial-filtered so a soft-deleted row stops occupying the key: deletes are
+// soft, so without this the value could never be reused (CLAUDE.md).
+employeeSchema.index(
+  { schoolId: 1, employeeNumber: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
 
 export type EmployeeDoc = InferSchemaType<typeof employeeSchema>;
 export const Employee = model('Employee', employeeSchema);

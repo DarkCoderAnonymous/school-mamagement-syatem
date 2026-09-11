@@ -15,7 +15,9 @@ const counterSchema = createTenantSchema({
 });
 
 // One counter per series per school, and the lookup every increment does.
-counterSchema.index({ schoolId: 1, key: 1 }, { unique: true });
+// Partial-filtered so a soft-deleted row stops occupying the key: deletes are
+// soft, so without this the value could never be reused (CLAUDE.md).
+counterSchema.index({ schoolId: 1, key: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
 
 export interface CounterDoc {
   _id: Types.ObjectId;
