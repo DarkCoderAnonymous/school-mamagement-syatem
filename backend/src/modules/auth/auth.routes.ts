@@ -7,6 +7,8 @@ import {
   forgotPasswordSchema,
   loginSchema,
   resetPasswordSchema,
+  selectSchoolSchema,
+  switchSchoolSchema,
 } from './auth.validation';
 import {
   changePasswordHandler,
@@ -16,6 +18,8 @@ import {
   meHandler,
   refreshHandler,
   resetPasswordHandler,
+  selectSchoolHandler,
+  switchSchoolHandler,
 } from './auth.controller';
 
 const router = Router();
@@ -28,6 +32,45 @@ const router = Router();
  *     tags: [Auth]
  */
 router.post('/login', loginRateLimiter, validate({ body: loginSchema }), loginHandler);
+
+/**
+ * @openapi
+ * /auth/select-school:
+ *   post:
+ *     summary: Finish a login for a user who belongs to several schools
+ *     description: >
+ *       Takes the short-lived selectionToken returned by /auth/login when it
+ *       responded with kind="select-school", plus the chosen schoolId, and
+ *       issues the real token pair. Rate-limited alongside login because it
+ *       completes an authentication.
+ *     tags: [Auth]
+ */
+router.post(
+  '/select-school',
+  loginRateLimiter,
+  validate({ body: selectSchoolSchema }),
+  selectSchoolHandler,
+);
+
+/**
+ * @openapi
+ * /auth/switch-school:
+ *   post:
+ *     summary: Move the current session to another of the user's schools
+ *     description: >
+ *       Issues a fresh token pair bound to the target membership and revokes
+ *       the current refresh token. No permission is required: this is
+ *       self-service over memberships the caller already holds, and the
+ *       target membership is re-verified server-side.
+ *     tags: [Auth]
+ *     security: [{ bearerAuth: [] }]
+ */
+router.post(
+  '/switch-school',
+  authenticate,
+  validate({ body: switchSchoolSchema }),
+  switchSchoolHandler,
+);
 
 /**
  * @openapi

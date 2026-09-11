@@ -11,6 +11,12 @@ const refreshTokenSchema = createTenantSchema({
   // nullable to support platform-only SUPER_ADMIN accounts (see User.ts)
   schoolId: { type: Schema.Types.ObjectId, ref: 'School', required: false, default: null, index: true },
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  /**
+   * Which membership this token acts through (ADR-001). Null for a platform
+   * SUPER_ADMIN. Switching schools issues a NEW token bound to the new
+   * membership and revokes the old one — a token's audience never mutates.
+   */
+  membershipId: { type: Schema.Types.ObjectId, ref: 'SchoolMembership', default: null, index: true },
   tokenHash: { type: String, required: true, unique: true },
   expiresAt: { type: Date, required: true },
   revokedAt: { type: Date, default: null },
@@ -23,6 +29,7 @@ export interface RefreshTokenDoc {
   _id: Types.ObjectId;
   schoolId?: Types.ObjectId | null;
   userId: Types.ObjectId;
+  membershipId?: Types.ObjectId | null;
   tokenHash: string;
   expiresAt: Date;
   revokedAt?: Date | null;

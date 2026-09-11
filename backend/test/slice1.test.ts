@@ -8,8 +8,10 @@ import { School } from '../src/models/School';
 import { Subscription } from '../src/models/Subscription';
 import { RoleModel } from '../src/models/Role';
 import { User } from '../src/models/User';
+import { SchoolMembership } from '../src/models/SchoolMembership';
 import { hashPassword } from '../src/utils/password';
 import { TenantContext } from '../src/tenant/context';
+import { asSystem } from './helpers/as-system';
 import { redis } from '../src/config/redis';
 import { enqueueMail, mailerQueue } from '../src/jobs/mailer.queue';
 
@@ -57,15 +59,17 @@ beforeAll(async () => {
   planId = String(plan._id);
 
   const superAdminRole = await RoleModel.findOne({ schoolId: null, name: Role.SUPER_ADMIN });
-  await User.create({
-    schoolId: null,
-    email: 'super@test.local',
-    passwordHash: await hashPassword('SuperPass123!'),
-    firstName: 'Super',
-    lastName: 'Admin',
-    roles: [superAdminRole!._id],
-    status: 'ACTIVE',
-  });
+  await asSystem(async () =>
+    User.create({
+      email: 'super@test.local',
+      passwordHash: await hashPassword('SuperPass123!'),
+      firstName: 'Super',
+      lastName: 'Admin',
+      // Platform account: no membership anywhere (ADR-001).
+      platformRoleIds: [superAdminRole!._id],
+      status: 'ACTIVE',
+    }),
+  );
 
   const loginRes = await request(app)
     .post('/api/v1/auth/login')
@@ -107,10 +111,17 @@ describe('Slice 1: registration -> approval -> login', () => {
       [Role.SCHOOL_ADMIN, Role.ACCOUNTANT, Role.EXAM_CONTROLLER, Role.TEACHER, Role.PARENT, Role.STUDENT].sort(),
     );
 
-    const adminUser = await User.findOne({ email: adminEmail }).lean();
+    const adminUser = await asSystem(() => User.findOne({ email: adminEmail }).lean());
     expect(adminUser?.mustChangePassword).toBe(true);
-    expect(adminUser?.schoolId?.toString()).toBe(String(school._id));
     expect(typeof tempPassword).toBe('string');
+
+    // Tenancy lives on the membership now, not on the user (ADR-001).
+    const membership = await asSystem(() =>
+      SchoolMembership.findOne({ userId: adminUser!._id, schoolId: school._id }).lean(),
+    );
+    expect(membership).not.toBeNull();
+    expect(membership!.status).toBe('ACTIVE');
+    expect(membership!.roleIds).toHaveLength(1);
   });
 
   it('rejects approving the same registration twice', async () => {
@@ -177,18 +188,22 @@ describe('Slice 1: registration -> approval -> login', () => {
     const schoolA = await submitAndApprove();
     const schoolB = await submitAndApprove();
 
-    const userA = await User.findOne({ email: schoolA.adminEmail }).lean();
-    const userB = await User.findOne({ email: schoolB.adminEmail }).lean();
+    const userA = await asSystem(() => User.findOne({ email: schoolA.adminEmail }).lean());
+    const userB = await asSystem(() => User.findOne({ email: schoolB.adminEmail }).lean());
 
     await TenantContext.run(
       { schoolId: String(schoolA.school._id), userId: String(userA!._id), role: Role.SCHOOL_ADMIN, isSuperAdmin: false },
       async () => {
-        const users = await User.find({}).lean();
-        expect(users.length).toBeGreaterThan(0);
-        expect(users.every((u) => String(u.schoolId) === String(schoolA.school._id))).toBe(true);
-        expect(users.some((u) => String(u._id) === String(userB!._id))).toBe(false);
+        // User is global now; SchoolMembership is the tenant-owned record,
+        // so it is what must never cross schools.
+        const memberships = await SchoolMembership.find({}).lean();
+        expect(memberships.length).toBeGreaterThan(0);
+        expect(memberships.every((m) => String(m.schoolId) === String(schoolA.school._id))).toBe(true);
+        expect(memberships.some((m) => String(m.userId) === String(userB!._id))).toBe(false);
 
-        const agg = await User.aggregate([{ $group: { _id: '$schoolId', count: { $sum: 1 } } }]);
+        const agg = await SchoolMembership.aggregate([
+          { $group: { _id: '$schoolId', count: { $sum: 1 } } },
+        ]);
         expect(agg).toHaveLength(1);
         expect(String(agg[0]._id)).toBe(String(schoolA.school._id));
       },
@@ -199,33 +214,38 @@ describe('Slice 1: registration -> approval -> login', () => {
     const schoolA = await submitAndApprove();
     const schoolB = await submitAndApprove();
 
-    const userA = await User.findOne({ email: schoolA.adminEmail }).lean();
-    const userB = await User.findOne({ email: schoolB.adminEmail }).lean();
+    const userA = await asSystem(() => User.findOne({ email: schoolA.adminEmail }).lean());
+    const userB = await asSystem(() => User.findOne({ email: schoolB.adminEmail }).lean());
 
     await TenantContext.run(
       { schoolId: String(schoolA.school._id), userId: String(userA!._id), role: Role.SCHOOL_ADMIN, isSuperAdmin: false },
       async () => {
         // Asking for school B explicitly must not widen the query past school A,
         // whether by filter, by id, or by write.
-        const leaked = await User.find({ schoolId: schoolB.school._id }).lean();
-        expect(leaked.every((u) => String(u.schoolId) === String(schoolA.school._id))).toBe(true);
+        const leaked = await SchoolMembership.find({ schoolId: schoolB.school._id }).lean();
+        expect(leaked.every((m) => String(m.schoolId) === String(schoolA.school._id))).toBe(true);
 
-        const leakedOne = await User.findOne({ _id: userB!._id, schoolId: schoolB.school._id }).lean();
+        const leakedOne = await SchoolMembership.findOne({
+          userId: userB!._id,
+          schoolId: schoolB.school._id,
+        }).lean();
         expect(leakedOne).toBeNull();
 
-        const countedAcross = await User.countDocuments({ schoolId: schoolB.school._id });
-        expect(countedAcross).toBe(await User.countDocuments({}));
+        const countedAcross = await SchoolMembership.countDocuments({ schoolId: schoolB.school._id });
+        expect(countedAcross).toBe(await SchoolMembership.countDocuments({}));
 
-        const crossWrite = await User.updateOne(
-          { _id: userB!._id, schoolId: schoolB.school._id },
-          { $set: { firstName: 'Hijacked' } },
+        const crossWrite = await SchoolMembership.updateOne(
+          { userId: userB!._id, schoolId: schoolB.school._id },
+          { $set: { status: 'DISABLED' } },
         );
         expect(crossWrite.matchedCount).toBe(0);
       },
     );
 
-    const untouched = await User.findById(userB!._id).lean();
-    expect(untouched!.firstName).not.toBe('Hijacked');
+    const untouched = await asSystem(() =>
+      SchoolMembership.findOne({ userId: userB!._id, schoolId: schoolB.school._id }).lean(),
+    );
+    expect(untouched!.status).toBe('ACTIVE');
   });
 });
 

@@ -1,14 +1,8 @@
 import type { ReactNode } from 'react';
 import { Role } from '@sms/shared';
 import { RequireAuth } from '@/components/auth/require-auth';
-import { NavShell } from '@/components/layout/nav-shell';
-
-const LINKS = [
-  { href: '/admin', label: 'Dashboard' },
-  { href: '/admin/registrations', label: 'Registrations' },
-  { href: '/admin/schools', label: 'Schools' },
-  { href: '/admin/plans', label: 'Plans' },
-];
+import { AppShell } from '@/components/layout/app-shell';
+import { ADMIN_NAV } from '@/lib/navigation';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
@@ -16,9 +10,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       allowRoles={[Role.SUPER_ADMIN]}
       forbiddenMessage="The Super Admin console is only available to Super Admin accounts."
     >
-      <NavShell brand="SMS · Super Admin" links={LINKS}>
+      <AppShell brand="Super Admin" nav={ADMIN_NAV}>
         {children}
-      </NavShell>
+      </AppShell>
     </RequireAuth>
   );
 }

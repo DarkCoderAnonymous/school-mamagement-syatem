@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
 import { Role } from '@sms/shared';
 import { RequireAuth } from '@/components/auth/require-auth';
-import { NavShell } from '@/components/layout/nav-shell';
-
-const LINKS = [{ href: '/app', label: 'Dashboard' }];
+import { AppShell } from '@/components/layout/app-shell';
+import { SCHOOL_NAV } from '@/lib/navigation';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -11,9 +10,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       denyRoles={[Role.SUPER_ADMIN]}
       forbiddenMessage="Super Admin accounts use the admin console instead."
     >
-      <NavShell brand="School Console" links={LINKS}>
+      <AppShell brand="School Console" nav={SCHOOL_NAV}>
         {children}
-      </NavShell>
+      </AppShell>
     </RequireAuth>
   );
 }

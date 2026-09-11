@@ -14,6 +14,7 @@
     "@hookform/resolvers": "^5.9.1",
     "@sms/shared": "*",
     "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-table": "^9.2.4",
     "axios": "^1.19.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

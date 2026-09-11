@@ -23,6 +23,10 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   [Permission.REGISTRATION_REJECT]: 'Reject a registration application',
   [Permission.PLAN_MANAGE]: 'Create/update the subscription plan catalogue',
   [Permission.SCHOOL_STATUS_UPDATE]: "Suspend or reactivate a school's account",
+  [Permission.SESSION_CREATE]: 'Create an academic session (school year)',
+  [Permission.SESSION_READ]: 'View academic sessions',
+  [Permission.SESSION_UPDATE]: 'Edit an academic session or set the current one',
+  [Permission.SESSION_DELETE]: 'Archive an academic session',
 };
 
 export const PERMISSION_CATALOG: PermissionCatalogEntry[] = Object.values(Permission).map((code) => ({

@@ -1,8 +1,31 @@
-import type { AuthUser, LoginRequest, LoginResponse, RefreshResponse } from '@sms/shared';
+import type {
+  AuthUser,
+  LoginRequest,
+  LoginResponse,
+  RefreshResponse,
+  SessionResponse,
+} from '@sms/shared';
 import { apiGet, apiPost } from './http';
 
+/**
+ * Resolves a PERSON, not a session (ADR-001). Check `result.kind`: a parent
+ * with children at two schools gets `select-school` and no tokens, and must
+ * choose first.
+ */
 export function login(input: LoginRequest): Promise<LoginResponse> {
   return apiPost<LoginResponse>('/auth/login', input);
+}
+
+export function selectSchool(selectionToken: string, schoolId: string): Promise<SessionResponse> {
+  return apiPost<SessionResponse>('/auth/select-school', { selectionToken, schoolId });
+}
+
+/**
+ * Mobile has no cookie jar, so the refresh token goes in the body — the
+ * backend needs it to revoke the session being switched away from.
+ */
+export function switchSchool(schoolId: string, refreshToken: string | null): Promise<SessionResponse> {
+  return apiPost<SessionResponse>('/auth/switch-school', { schoolId, refreshToken });
 }
 
 export function refresh(refreshToken: string): Promise<RefreshResponse> {

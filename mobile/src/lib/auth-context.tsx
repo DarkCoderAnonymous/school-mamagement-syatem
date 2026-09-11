@@ -1,13 +1,25 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { AuthUser } from '@sms/shared';
+import type { AuthUser, MembershipSummary } from '@sms/shared';
 import { tokenStorage } from './token-storage';
 import * as authApi from './api/auth';
 
 type SessionStatus = 'loading' | 'signed-in' | 'signed-out';
 
+interface PendingSelection {
+  selectionToken: string;
+  memberships: MembershipSummary[];
+}
+
 interface SessionContextValue {
   user: AuthUser | null;
   status: SessionStatus;
+  /**
+   * Set between password verification and school choice (ADR-001). Not a
+   * session — it only proves the password was just accepted, and it expires
+   * in five minutes.
+   */
+  pendingSelection: PendingSelection | null;
+  setPendingSelection: (pending: PendingSelection | null) => void;
   signIn: (user: AuthUser, accessToken: string, refreshToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -25,6 +37,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<SessionStatus>('loading');
+  const [pendingSelection, setPendingSelection] = useState<PendingSelection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,9 +70,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       status,
+      pendingSelection,
+      setPendingSelection,
       async signIn(nextUser, accessToken, refreshToken) {
         await tokenStorage.setTokens(accessToken, refreshToken);
         setUser(nextUser);
+        setPendingSelection(null);
         setStatus('signed-in');
       },
       async signOut() {
@@ -71,6 +87,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
         await tokenStorage.clear();
         setUser(null);
+        setPendingSelection(null);
         setStatus('signed-out');
       },
       async refreshUser() {
@@ -78,7 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setUser(me);
       },
     }),
-    [user, status],
+    [user, status, pendingSelection],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

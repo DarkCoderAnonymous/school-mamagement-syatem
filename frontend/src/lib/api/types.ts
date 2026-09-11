@@ -66,3 +66,16 @@ export interface ApproveRegistrationResult {
   tempPassword: string;
   adminEmail: string;
 }
+
+export interface AcademicSession {
+  _id: string;
+  schoolId: string;
+  name: string;
+  /** ISO date string (stored UTC). */
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -24,6 +24,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Incorrect email or password.',
+  NO_ACTIVE_MEMBERSHIP: 'This account is not active at any school. Contact your administrator.',
   SCHOOL_SUSPENDED: "Your school's account has been suspended. Contact your administrator.",
   SUBSCRIPTION_INACTIVE: "Your school's subscription is not active. Contact your administrator.",
   ACCOUNT_DISABLED: 'This account has been disabled.',
@@ -42,7 +43,20 @@ export default function LoginPage() {
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
     try {
-      const { user, accessToken } = await login(values);
+      const result = await login(values);
+
+      // A person who belongs to several schools gets a choice, not a guessed
+      // session (ADR-001). No tokens exist yet at this point.
+      if (result.kind === 'select-school') {
+        useAuthStore.getState().setPendingSelection({
+          selectionToken: result.selectionToken,
+          memberships: result.memberships,
+        });
+        router.replace('/select-school');
+        return;
+      }
+
+      const { user, accessToken } = result;
       useAuthStore.getState().setSession(user, accessToken);
 
       if (user.mustChangePassword) {

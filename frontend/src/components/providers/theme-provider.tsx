@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 
 export function ThemeProvider({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <NextThemesProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <NextThemesProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
       {children}
     </NextThemesProvider>
   );

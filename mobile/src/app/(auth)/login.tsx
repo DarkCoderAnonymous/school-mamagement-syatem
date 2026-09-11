@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
@@ -9,6 +9,7 @@ import { useSession } from '@/lib/auth-context';
 
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Incorrect email or password.',
+  NO_ACTIVE_MEMBERSHIP: 'This account is not active at any school. Contact your school.',
   SCHOOL_SUSPENDED: "Your school's account has been suspended. Contact your administrator.",
   SUBSCRIPTION_INACTIVE: "Your school's subscription is not active. Contact your administrator.",
   ACCOUNT_DISABLED: 'This account has been disabled.',
@@ -16,7 +17,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export default function LoginScreen() {
-  const { signIn } = useSession();
+  const { signIn, setPendingSelection } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +31,18 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const result = await login({ email, password });
+
+      // A parent with children at two schools must choose which one to open
+      // (ADR-001) — no tokens have been issued yet.
+      if (result.kind === 'select-school') {
+        setPendingSelection({
+          selectionToken: result.selectionToken,
+          memberships: result.memberships,
+        });
+        router.replace('/select-school');
+        return;
+      }
+
       await signIn(result.user, result.accessToken, result.refreshToken);
     } catch (err) {
       setError(err instanceof ApiRequestError ? (ERROR_MESSAGES[err.code] ?? err.message) : 'Something went wrong');

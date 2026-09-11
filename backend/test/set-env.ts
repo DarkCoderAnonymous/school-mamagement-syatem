@@ -14,4 +14,8 @@ process.env.CORS_ORIGIN ??= 'http://localhost:3000';
 // failure mode here). Forced rather than defaulted so the suite behaves the
 // same whether or not the developer happens to have Redis running.
 process.env.REDIS_URL = 'redis://127.0.0.1:1';
+// A suite drives far more logins from one "IP" than a human ever would, and
+// the default (20 per 15 min) would turn ordinary test setup into 429s. The
+// limiter itself still runs — only the ceiling is raised.
+process.env.AUTH_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_ENV = 'test';

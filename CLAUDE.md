@@ -50,10 +50,28 @@ Services never touch req/res.
   dashboard/report pipelines are scoped without each one remembering to do it. It also
   overrides any caller-supplied `schoolId` rather than trusting it, so passing another
   school's id in a filter cannot widen a query past its tenant.
-- Still NOT covered, and therefore still your job: `$lookup` sub-pipelines joining a
-  tenant collection (the plugin scopes the outer pipeline only), and any raw driver
-  access via `Model.collection`. A `$lookup` into a tenant collection must carry its own
-  `$match: { schoolId }` or it will leak cross-school data.
+- The plugin FAILS CLOSED: a tenant-scoped operation with no tenant context throws
+  rather than running unscoped. Trusted non-request code (seed scripts, migrations,
+  jobs, tests asserting on raw collections) opts out explicitly with
+  `TenantContext.runAsSystem()`, so "unscoped" is always something somebody wrote
+  down. Public pre-auth routes (login, refresh, logout, forgot/reset password) use it
+  too — they genuinely cannot be scoped, since no school is proven yet.
+  CAUTION: a Mongoose query is lazy. `runAsSystem(() => Model.find(...))` returns an
+  unexecuted Query that then runs *outside* the scope and throws — await inside the
+  callback, or call `.exec()`.
+- `$lookup` into a tenant collection is now handled: pipeline form gets a
+  `$match: { schoolId }` prepended to its sub-pipeline, and `localField`/`foreignField`
+  form is REJECTED (it has nowhere to carry a condition) — rewrite it in pipeline form.
+- Operations that cannot be scoped are blocked outright: `estimatedDocumentCount()`
+  (takes no filter — use `countDocuments()`) and `bulkWrite()` on tenant collections.
+  `insertMany` and upserts stamp `schoolId` like `save()` does.
+- Raw driver access (`Model.collection`, `db.collection()`) bypasses all middleware and
+  is blocked by an ESLint rule in `backend/eslint.config.mjs`, since no runtime hook can
+  catch it.
+- Per-school numbering (admission, invoice, receipt, employee codes) goes through
+  `services/sequence.service.ts`, which uses an atomic `$inc` — never read-max-and-add-one.
+- `test/cross-tenant.test.ts` is the suite that guards all of the above. Every new module
+  adds cases to it; a module is not done until it does.
 - Compound indexes on every list query's filter+sort combination, always including
   schoolId as the leading field for tenant-owned collections.
 - Use `.lean()` on read-only queries.
@@ -70,6 +88,17 @@ error:   { success: false, error: { code, message, details? } }
 ## Multi-tenancy rules — CRITICAL
 - Every tenant-owned collection has a non-null `schoolId` field (ObjectId ref to School).
 - Every authenticated request carries `schoolId` in the JWT payload.
+- **Identity is global; tenancy is a membership (ADR-001).** `User` is a platform
+  collection — the person, their credential, globally-unique email, no `schoolId`.
+  `SchoolMembership` is tenant-owned and holds the roles, status and per-school domain
+  links (`teacherId`/`guardianId`/`studentId`) for one (person, school) pair. A teacher
+  at two schools is ONE user with two memberships and potentially different roles at
+  each. Listing "people at a school" therefore queries SchoolMembership, never User.
+- A platform `SUPER_ADMIN` is a User with **no** memberships and `platformRoleIds`.
+- Login resolves a person, not a session: one membership issues tokens directly, several
+  return `kind: 'select-school'` with a 5-minute selection token and NO tokens. Never
+  guess a default school. `POST /auth/switch-school` re-issues the pair for another
+  membership and revokes the old refresh token — a token's audience never mutates.
 - A Mongoose plugin, applied to every tenant schema, automatically injects `schoolId` into
   every query (find/update/delete) and every document created, for non-SUPER_ADMIN users,
   via an AsyncLocalStorage-based tenant context read at query time (a pre-hook plugin, not
@@ -81,6 +110,21 @@ error:   { success: false, error: { code, message, details? } }
 SUPER_ADMIN, SCHOOL_ADMIN, ACCOUNTANT, EXAM_CONTROLLER, TEACHER, PARENT, STUDENT
 Roles map to permissions (e.g. "fee.invoice.create") stored in DB, not hard-coded in guards.
 Guards check permissions, not role names, so custom roles can be added later.
+
+Permissions are denormalized into the access token, so **any code that changes what a
+membership may do must bump its epoch** (ADR-005):
+
+- `bumpMembershipEpoch(membershipId)` after assigning/removing roles;
+  `bumpEpochForRole(roleId)` after editing a role's permission list. A missed bump
+  silently reintroduces up to 15 minutes of stale access.
+- `authenticate` compares the token's epoch against the live value (Redis, 5s in-process
+  cache, DB fallback) and rejects a mismatch with `TOKEN_STALE` — the client refreshes
+  and retries, so the user sees nothing.
+- `revokeAllSessions(userId)` is the blunt instrument: sets `sessionsValidFrom` and
+  revokes refresh tokens. Used on account disable, password change and reset. Unlike an
+  epoch bump it **cannot** be recovered by refreshing (`SESSION_REVOKED`).
+- The epoch lookup only accepts an ACTIVE, non-deleted membership, so removing someone
+  from a school ends their access on the next request.
 
 ## Non-negotiables
 - TypeScript strict mode everywhere. No `any` without a comment justifying it.

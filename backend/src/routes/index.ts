@@ -4,6 +4,7 @@ import registrationsRoutes from '../modules/registrations/registrations.routes';
 import plansRoutes from '../modules/plans/plans.routes';
 import adminPlansRoutes from '../modules/plans/admin-plans.routes';
 import authRoutes from '../modules/auth/auth.routes';
+import academicSessionsRoutes from '../modules/academic-sessions/academic-sessions.routes';
 import adminRegistrationsRoutes from '../modules/admin/registrations/admin-registrations.routes';
 import adminSchoolsRoutes from '../modules/admin/schools/admin-schools.routes';
 
@@ -13,6 +14,7 @@ router.use('/health', healthRoutes);
 router.use('/registrations', registrationsRoutes);
 router.use('/plans', plansRoutes);
 router.use('/auth', authRoutes);
+router.use('/academic-sessions', academicSessionsRoutes);
 router.use('/admin/plans', adminPlansRoutes);
 router.use('/admin/registrations', adminRegistrationsRoutes);
 router.use('/admin/schools', adminSchoolsRoutes);

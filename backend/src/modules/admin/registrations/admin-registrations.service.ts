@@ -6,6 +6,7 @@ import { School } from '../../../models/School';
 import { Subscription } from '../../../models/Subscription';
 import { RoleModel } from '../../../models/Role';
 import { User } from '../../../models/User';
+import { SchoolMembership } from '../../../models/SchoolMembership';
 import { AppError } from '../../../utils/AppError';
 import { buildPaginationMeta } from '../../../utils/response';
 import { parsePaginationQuery } from '../../../utils/paginate';
@@ -85,7 +86,9 @@ async function generateUniqueSlug(schoolName: string, session: mongoose.ClientSe
  */
 export async function approveRegistration(id: string, actor: ActorMeta) {
   const session = await mongoose.startSession();
-  let result: { school: unknown; tempPassword: string; adminEmail: string } | undefined;
+  // tempPassword is null when the admin already had an account — we must not
+  // reset an existing person's password just because they opened a school.
+  let result: { school: unknown; tempPassword: string | null; adminEmail: string } | undefined;
 
   try {
     await session.withTransaction(async () => {
@@ -138,25 +141,50 @@ export async function approveRegistration(id: string, actor: ActorMeta) {
       const schoolAdminRole = roleDocs.find((r) => r.name === Role.SCHOOL_ADMIN);
       if (!schoolAdminRole) throw AppError.internal('Failed to seed SCHOOL_ADMIN role');
 
-      const tempPassword = generateTempPassword();
       const [firstName, ...rest] = registration.contactPerson.trim().split(/\s+/);
-      const [adminUser] = await User.create(
+
+      /**
+       * Identity is global now (ADR-001), so the person may already exist —
+       * a head teacher opening a second school, or a parent who already has
+       * an account elsewhere. Reuse the identity and add a membership rather
+       * than failing on the unique email, which is the whole point of the
+       * split.
+       */
+      let adminUser = await User.findOne({ email: registration.email.toLowerCase() }).session(session);
+      let tempPassword: string | null = null;
+
+      if (!adminUser) {
+        tempPassword = generateTempPassword();
+        const [created] = await User.create(
+          [
+            {
+              email: registration.email,
+              passwordHash: await hashPassword(tempPassword),
+              firstName: firstName || registration.contactPerson,
+              lastName: rest.join(' ') || 'Admin',
+              phone: registration.phone,
+              status: 'ACTIVE',
+              mustChangePassword: true,
+            },
+          ],
+          { session },
+        );
+        if (!created) throw AppError.internal('Failed to create School Admin user');
+        adminUser = created;
+      }
+
+      const [membership] = await SchoolMembership.create(
         [
           {
             schoolId: school._id,
-            email: registration.email,
-            passwordHash: await hashPassword(tempPassword),
-            firstName: firstName || registration.contactPerson,
-            lastName: rest.join(' ') || 'Admin',
-            phone: registration.phone,
-            roles: [schoolAdminRole._id],
+            userId: adminUser._id,
+            roleIds: [schoolAdminRole._id],
             status: 'ACTIVE',
-            mustChangePassword: true,
           },
         ],
         { session },
       );
-      if (!adminUser) throw AppError.internal('Failed to create School Admin user');
+      if (!membership) throw AppError.internal('Failed to create School Admin membership');
 
       registration.status = 'APPROVED';
       registration.reviewedBy = new mongoose.Types.ObjectId(actor.actorUserId);
@@ -170,7 +198,7 @@ export async function approveRegistration(id: string, actor: ActorMeta) {
         action: 'registration.approve',
         entity: 'School',
         entityId: school._id,
-        after: { schoolId: school._id, adminUserId: adminUser._id },
+        after: { schoolId: school._id, adminUserId: adminUser._id, membershipId: membership._id },
         ip: actor.ip,
         session,
       });
@@ -186,7 +214,9 @@ export async function approveRegistration(id: string, actor: ActorMeta) {
   await enqueueMail({
     to: result.adminEmail,
     subject: 'Your school has been approved',
-    body: `Your school is ready. Log in with email ${result.adminEmail} and temporary password ${result.tempPassword}. You will be asked to change it on first login.`,
+    body: result.tempPassword
+      ? `Your school is ready. Log in with email ${result.adminEmail} and temporary password ${result.tempPassword}. You will be asked to change it on first login.`
+      : `Your school is ready. Sign in with your existing ${result.adminEmail} account — you will be asked which school to open.`,
   });
 
   return result;

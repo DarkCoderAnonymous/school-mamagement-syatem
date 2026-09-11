@@ -1,8 +1,29 @@
-import type { AuthUser, LoginRequest, LoginResponse, RefreshResponse } from '@sms/shared';
+import type {
+  AuthUser,
+  LoginRequest,
+  LoginResponse,
+  RefreshResponse,
+  SessionResponse,
+} from '@sms/shared';
 import { apiPost, apiGet } from './http';
 
+/**
+ * Resolves a PERSON, not a session (ADR-001). Check `result.kind`: a user who
+ * belongs to more than one school gets `select-school` and NO tokens, and must
+ * choose before a session exists.
+ */
 export function login(input: LoginRequest): Promise<LoginResponse> {
   return apiPost<LoginResponse>('/auth/login', input);
+}
+
+/** Second half of a multi-school login. */
+export function selectSchool(selectionToken: string, schoolId: string): Promise<SessionResponse> {
+  return apiPost<SessionResponse>('/auth/select-school', { selectionToken, schoolId });
+}
+
+/** Moves an active session to another of the user's schools. */
+export function switchSchool(schoolId: string): Promise<SessionResponse> {
+  return apiPost<SessionResponse>('/auth/switch-school', { schoolId });
 }
 
 /** Silent session bootstrap on app load — relies on the httpOnly refresh cookie. */

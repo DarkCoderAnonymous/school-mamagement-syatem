@@ -64,3 +64,11 @@ export async function apiPatch<T>(url: string, body?: unknown): Promise<T> {
     throw normalizeError(err);
   }
 }
+
+export async function apiDelete(url: string): Promise<void> {
+  try {
+    await apiClient.delete(url);
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}

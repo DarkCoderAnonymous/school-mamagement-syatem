@@ -12,6 +12,10 @@ export const ROLE_TEMPLATES: Record<Role, Permission[]> = {
   [Role.SUPER_ADMIN]: Object.values(Permission),
 
   [Role.SCHOOL_ADMIN]: [
+    Permission.SESSION_CREATE,
+    Permission.SESSION_READ,
+    Permission.SESSION_UPDATE,
+    Permission.SESSION_DELETE,
     Permission.STUDENT_CREATE,
     Permission.STUDENT_READ,
     Permission.STUDENT_UPDATE,
@@ -43,6 +47,7 @@ export const ROLE_TEMPLATES: Record<Role, Permission[]> = {
   ],
 
   [Role.ACCOUNTANT]: [
+    Permission.SESSION_READ,
     Permission.STUDENT_READ,
     Permission.FEE_INVOICE_CREATE,
     Permission.FEE_INVOICE_READ,
@@ -51,6 +56,7 @@ export const ROLE_TEMPLATES: Record<Role, Permission[]> = {
   ],
 
   [Role.EXAM_CONTROLLER]: [
+    Permission.SESSION_READ,
     Permission.STUDENT_READ,
     Permission.CLASS_READ,
     Permission.EXAM_CREATE,
@@ -61,6 +67,7 @@ export const ROLE_TEMPLATES: Record<Role, Permission[]> = {
   ],
 
   [Role.TEACHER]: [
+    Permission.SESSION_READ,
     Permission.STUDENT_READ,
     Permission.CLASS_READ,
     Permission.ATTENDANCE_MARK,

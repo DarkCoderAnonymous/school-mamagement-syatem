@@ -33,6 +33,12 @@ export enum Permission {
   TEACHER_UPDATE = 'teacher.update',
   TEACHER_DELETE = 'teacher.delete',
 
+  // Academic session (school year)
+  SESSION_CREATE = 'session.create',
+  SESSION_READ = 'session.read',
+  SESSION_UPDATE = 'session.update',
+  SESSION_DELETE = 'session.delete',
+
   // Class / Subject
   CLASS_CREATE = 'class.create',
   CLASS_READ = 'class.read',

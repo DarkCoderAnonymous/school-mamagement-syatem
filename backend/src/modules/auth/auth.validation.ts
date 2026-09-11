@@ -1,32 +1,24 @@
-import { z } from 'zod';
+/**
+ * Auth validation lives in `@sms/shared` so backend guards and the web/mobile
+ * forms enforce literally the same rules (master prompt, rule 9). Re-exported
+ * here so route files keep importing from their own module, as every other
+ * module does.
+ */
+export {
+  loginSchema,
+  selectSchoolSchema,
+  switchSchoolSchema,
+  refreshSchema,
+  logoutSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+} from '@sms/shared';
 
-export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
-
-export const refreshSchema = z.object({
-  refreshToken: z.string().min(1).optional(),
-});
-
-export const logoutSchema = z.object({
-  refreshToken: z.string().min(1).optional(),
-});
-
-export const forgotPasswordSchema = z.object({
-  email: z.string().email(),
-});
-
-export const resetPasswordSchema = z.object({
-  token: z.string().min(1),
-  password: z.string().min(8),
-});
-
-export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1),
-  newPassword: z.string().min(8),
-});
-
-export type LoginInput = z.infer<typeof loginSchema>;
-export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type {
+  LoginInput,
+  SelectSchoolInput,
+  SwitchSchoolInput,
+  ResetPasswordInput,
+  ChangePasswordInput,
+} from '@sms/shared';
