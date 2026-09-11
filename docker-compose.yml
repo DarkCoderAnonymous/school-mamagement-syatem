@@ -1,0 +1,57 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: sms_mongodb
+    restart: unless-stopped
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: sms
+      MONGO_INITDB_ROOT_PASSWORD: sms_dev_password
+      MONGO_INITDB_DATABASE: sms_dev
+    ports:
+      - "27017:27017"
+    volumes:
+      - sms_mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: initiates the single-node replica set (rs0) that mongodb was
+  # started with above. Mongoose transactions (school approval, fee payment,
+  # payroll run, marks publish — see CLAUDE.md) require a replica set even
+  # with a single member; a plain standalone mongod cannot start a session
+  # transaction at all.
+  mongo-init:
+    image: mongo:7
+    container_name: sms_mongo_init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - bash
+      - -c
+      - >
+        mongosh --host mongodb:27017 -u sms -p sms_dev_password --authSource admin --quiet --eval
+        "try { rs.status(); print('rs0 already initiated'); } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongodb:27017' }] }); print('rs0 initiated'); }"
+
+  redis:
+    image: redis:7-alpine
+    container_name: sms_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - sms_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  sms_mongodb_data:
+  sms_redis_data:

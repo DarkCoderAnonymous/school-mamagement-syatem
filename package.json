@@ -1,0 +1,43 @@
+{
+  "name": "school-management-system",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend",
+    "mobile"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w shared",
+    "dev:backend": "npm run start:dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:mobile": "npm run start -w mobile",
+    "test": "npm test -w backend",
+    "lint": "npm run lint -w shared && npm run lint -w backend && npm run lint -w frontend && npm run lint -w mobile",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w backend && npm run typecheck -w frontend && npm run typecheck -w mobile"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/parser": "^8.67.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^9.1.2",
+    "globals": "^15.15.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "allowScripts": {
+    "@nestjs/core@10.4.22": true,
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "argon2@0.41.1": true,
+    "esbuild@0.27.7": true,
+    "prisma@5.22.0": true,
+    "unrs-resolver@1.12.2": true
+  }
+}
