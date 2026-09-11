@@ -50,12 +50,48 @@ You are a senior full-stack engineer continuing work on an existing multi-tenant
 - [ ] REST routes with permission guards, validation, pagination
 - [ ] Permissions registered and assigned to default roles
 - [ ] Audit log entries for sensitive actions
-- [ ] Integration tests + cross-tenant tests passing
+- [ ] Integration tests passing
+- [ ] **Registered with the cross-tenant harness** — see below. Non-negotiable:
+      CI fails the build on an unregistered tenant-owned model.
 - [ ] Web pages (list, create, edit, detail, empty states, loading, errors)
 - [ ] Mobile screens where the role needs them
 - [ ] Seed data added so the UI is never empty
 - [ ] OpenAPI docs updated
 - [ ] `CLAUDE.md` updated if a convention changed
+
+### Registering with the cross-tenant harness
+
+`backend/test/cross-tenant/` generates its probes from one registry, so adding
+a module means adding an entry — not copying a test file.
+
+1. **Every tenant-owned model** (anything built with `createTenantSchema`) gets
+   an entry in `TENANT_MODELS` in `backend/test/cross-tenant/registry.ts`:
+   a `build()` factory, a `mutation` a cross-tenant write would attempt, and
+   `foreignKeys` for any reference into another tenant collection.
+   `npm run check:registry` fails the build if a model is missing, because an
+   unregistered model gets **no** isolation coverage and its absence is
+   invisible in a green run.
+2. **Every endpoint that reads or writes tenant data** gets an entry in
+   `TENANT_ENDPOINTS`.
+3. `build()` takes a `seed` that MUST vary every field under a unique index.
+   A probe that creates a second record with the same values throws `E11000`
+   and passes for a reason unrelated to tenancy — reporting safety it never
+   tested. This has happened twice; see
+   `docs/security/tenant-isolation-findings.md`.
+4. Deliberate exceptions are **declared with their reason** in the registry
+   (`allowedGlobalUniqueIndexes`, `uniqueValueReuseNotApplicable`) rather than
+   excluded from the rule, so the next reader sees intent instead of assuming
+   an oversight.
+
+Registering earns the module the full battery automatically: list, read,
+update, delete, guessed ids, forged bodies, forged query params, cross-tenant
+foreign keys, index shape, soft-delete reuse, and the plugin bypasses
+(aggregate, `$lookup`, `populate`, `insertMany`, `bulkWrite`, `distinct`,
+upserts, fail-closed).
+
+**Read `docs/security/tenant-isolation-findings.md` before changing the tenant
+plugin.** Several of its guards look excessive without the record of what they
+were written against.
 
 ## Phase report format (end of every phase)
 
@@ -95,6 +131,10 @@ Write short Architecture Decision Records in `docs/adr/` and wait for my approva
 - Add a per-school atomic sequence service (`counters` collection, `findOneAndUpdate` with `$inc`) for admission numbers, invoice numbers, receipt numbers, employee codes.
 - Implement `schoolId` prefixing + signed URLs + tenant check in `StorageService`.
 - **Build the cross-tenant test suite**: create two schools with data; for every model and every endpoint, assert that School A's user cannot list, read, update, delete, or reference School B's records (including by guessing IDs and by passing `schoolId` in the body/query). This suite must run in CI and grow with every module.
+  **DONE** — `backend/test/cross-tenant/`, registry-driven, wired into CI as its
+  own named check plus a registry-coverage gate. Its first run produced five
+  findings, recorded in `docs/security/tenant-isolation-findings.md`; all are
+  fixed. Growing it is now a registry edit, not a new test file.
 
 ## Phase 3 — Platform foundations
 

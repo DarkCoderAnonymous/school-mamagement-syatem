@@ -58,3 +58,18 @@ jobs:
       # outage degrades the API instead of hanging it.
       - name: Test
         run: npm test
+
+      # Run again, alone and named, so a tenant-isolation regression is
+      # legible in the checks list rather than buried in a 220-line summary.
+      # `npm test` above already covers these; the cost is a few seconds and
+      # the benefit is that "Cross-tenant isolation" appears as its own red X
+      # on the PR — which is the failure nobody should have to go looking for.
+      - name: Cross-tenant isolation
+        run: npm run test:cross-tenant -w backend
+
+      # The registry is the contract: a tenant-owned model that nobody
+      # registered gets none of the isolation probes, and its absence is
+      # invisible in a green run. This fails the build on an unregistered
+      # model rather than waiting for someone to notice.
+      - name: Every tenant model is registered
+        run: npm run check:registry -w backend

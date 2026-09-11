@@ -70,8 +70,14 @@ Services never touch req/res.
   catch it.
 - Per-school numbering (admission, invoice, receipt, employee codes) goes through
   `services/sequence.service.ts`, which uses an atomic `$inc` — never read-max-and-add-one.
-- `test/cross-tenant.test.ts` is the suite that guards all of the above. Every new module
-  adds cases to it; a module is not done until it does.
+- `backend/test/cross-tenant/` is the registry-driven harness that guards all of the
+  above. Adding a module means adding ONE entry to `registry.ts` — never a new test
+  file — which earns it the full battery of isolation probes. `npm run check:registry`
+  fails CI if a tenant-owned model is unregistered, since an unregistered model gets no
+  coverage and a green run hides that.
+- **Read `docs/security/tenant-isolation-findings.md` before changing the tenant
+  plugin.** It records the five isolation defects the harness found and why each guard
+  is shaped the way it is — several look like over-engineering without it.
 - Compound indexes on every list query's filter+sort combination, always including
   schoolId as the leading field for tenant-owned collections.
 - Use `.lean()` on read-only queries.

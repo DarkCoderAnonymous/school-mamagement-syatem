@@ -63,7 +63,10 @@ mobile screens → seed data → cross-tenant tests → update this file → sto
 - [x] `estimatedDocumentCount` and `bulkWrite` blocked on tenant collections
 - [x] Raw driver access (`Model.collection`, `db.collection()`) blocked by ESLint rule
 - [x] Per-school atomic sequence service (`services/sequence.service.ts` + `Counter` model)
-- [x] **Cross-tenant test suite** (`test/cross-tenant.test.ts`) — 18 cases, runs in CI
+- [x] **Cross-tenant harness** (`test/cross-tenant/`) — registry-driven, 220 tests
+      total in the suite, its own named CI check plus a registry-coverage gate
+- [x] Five isolation findings from its first run, all fixed — see
+      `docs/security/tenant-isolation-findings.md`
 - [ ] `StorageService` with `schools/{schoolId}/` prefixing, signed URLs, tenant check
 
 ### UI foundation
