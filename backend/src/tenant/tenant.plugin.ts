@@ -74,7 +74,54 @@ function resolveScope(operation: string): { error?: Error; schoolId?: Types.Obje
   return { schoolId: new Types.ObjectId(ctx.schoolId) };
 }
 
+
+/**
+ * Every schema the plugin has been applied to — i.e. every tenant-owned
+ * collection. Registered by `tenantPlugin` itself, so it cannot drift the way
+ * a hand-written list of model names would, and used to tell a reference into
+ * another tenant collection (needs a same-school check) from one into a
+ * platform collection like User or Role (shared by design).
+ */
+const TENANT_SCHEMAS = new WeakSet<Schema>();
+
+export function isTenantScopedSchema(schema: Schema | undefined): boolean {
+  return Boolean(schema && TENANT_SCHEMAS.has(schema));
+}
+
+/** A reference field on a schema, flattened so arrays and scalars look alike. */
+interface RefPath {
+  path: string;
+  ref: string;
+  isArray: boolean;
+}
+
+/**
+ * Every `ref:` path on a schema, computed once per schema and cached — walking
+ * the paths on every write would be wasteful, and schemas don't change at
+ * runtime.
+ */
+const refPathCache = new WeakMap<Schema, RefPath[]>();
+
+function tenantRefPaths(schema: Schema): RefPath[] {
+  const cached = refPathCache.get(schema);
+  if (cached) return cached;
+
+  const refs: RefPath[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SchemaType's options aren't typed generically across scalar and array casters
+  schema.eachPath((path: string, type: any) => {
+    if (path === 'schoolId') return;
+    const ref = type?.options?.ref ?? type?.caster?.options?.ref;
+    if (typeof ref !== 'string') return;
+    refs.push({ path, ref, isArray: Boolean(type?.caster) });
+  });
+
+  refPathCache.set(schema, refs);
+  return refs;
+}
+
 export function tenantPlugin(schema: Schema): void {
+  TENANT_SCHEMAS.add(schema);
+
   for (const op of SCOPED_QUERY_MIDDLEWARE) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mongoose query middleware types don't unify cleanly across these ops
     schema.pre(op as any, function (this: any, next: (err?: Error) => void) {
@@ -242,6 +289,64 @@ export function tenantPlugin(schema: Schema): void {
 
   schema.pre('validate', stampTenant);
   schema.pre('save', stampTenant);
+
+  /**
+   * Cross-tenant foreign keys (finding 2).
+   *
+   * The stamp above only settles who OWNS the document. It says nothing about
+   * what the document POINTS AT, and nothing else validated that either — so
+   * School A could create a Student whose classId, sectionId and
+   * academicSessionId all referenced School B. The row looked perfectly
+   * legitimate: correctly owned, and passing every isolation check we had.
+   *
+   * Each reference is resolved through its own model, which means the query
+   * middleware above scopes the lookup to the acting school. A reference into
+   * another tenant simply isn't found, and the write is refused. The scoping
+   * plugin ends up validating itself.
+   *
+   * Only references into OTHER TENANT collections are checked. Platform
+   * collections (User, Role) are shared by design — a person and a system
+   * role legitimately exist outside any one school.
+   */
+  schema.pre('validate', async function (this: any) {
+    const ctx = TenantContext.get();
+    // SUPER_ADMIN crosses tenants deliberately, and system code (seed,
+    // migrations) is trusted; both are audited by their callers.
+    if (!ctx || ctx.isSuperAdmin) return;
+
+    for (const { path, ref, isArray } of tenantRefPaths(schema)) {
+      const raw = this.get(path);
+      if (raw === null || raw === undefined) continue;
+
+      const values = (isArray ? raw : [raw]) as unknown[];
+      if (values.length === 0) continue;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- model() is resolved by name at runtime
+      let refModel: any;
+      try {
+        refModel = this.model(ref);
+      } catch {
+        // Reference to a model that isn't registered in this process (a
+        // partially-loaded test, say). Not something to fail a write over.
+        continue;
+      }
+
+      if (!isTenantScopedSchema(refModel?.schema)) continue;
+
+      for (const value of values) {
+        if (value === null || value === undefined) continue;
+        // Scoped by the query middleware above, so "not found" means "not in
+        // this school" just as much as "doesn't exist".
+        const exists = await refModel.exists({ _id: value });
+        if (!exists) {
+          throw new Error(
+            `${path} references a ${ref} that does not belong to this school. ` +
+              'Cross-tenant references are not allowed.',
+          );
+        }
+      }
+    }
+  });
 
   /**
    * insertMany() bypasses document middleware entirely, so without this hook

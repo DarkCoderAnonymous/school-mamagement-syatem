@@ -12,7 +12,7 @@ simplify one away.
 | # | Finding | Severity | Layer | Status |
 | --- | --- | --- | --- | --- |
 | 1 | `create()` trusts a caller-supplied `schoolId` | **Critical** | Plugin (`pre('save')`) | **Fixed** |
-| 2 | Cross-tenant foreign keys accepted on write | **High** | No validation anywhere | Open |
+| 2 | Cross-tenant foreign keys accepted on write | **High** | No validation anywhere | **Fixed (creates/saves)** |
 | 3 | `Teacher.employeeId` globally unique on a tenant collection | **Medium** | Model index | Open |
 | 4 | Unique indexes don't exclude soft-deleted rows | **Low** | Model indexes | Open |
 | 5 | The plugin never actually stamps `schoolId` on create | **Medium** | Plugin (hook ordering) | **Fixed** |
@@ -90,6 +90,24 @@ reference without re-checking it.
 **How it was found:** a registry-declared `foreignKeys` list per model; the
 harness attempts a create with each reference pointed at the other school. 7
 of 7 reference fields accepted it.
+
+**Fix:** the plugin resolves every `ref:` path through its own model on
+`pre('validate')`. Because that lookup goes through the same query middleware,
+it is scoped to the acting school — a reference into another tenant simply
+isn't found, and the write is refused. Only references into other TENANT
+collections are checked; `User` and `Role` are platform collections, shared by
+design. The registry of tenant schemas is a `WeakSet` populated by the plugin
+itself, so it cannot drift as models are added.
+
+**KNOWN LIMITATION — the update path is not covered.** Document middleware
+catches `create()` and `save()`. A reference changed through the query API —
+`Model.updateOne({ _id }, { $set: { classId: <other school> } })` — is not
+validated: the query middleware scopes the *filter* but does not inspect the
+update operators. Covering it means walking `$set`/`$push`/`$addToSet` across
+every update shape, which is a larger change than this fix. No current service
+updates a reference field, and a probe for it is registered in the harness as
+a pending case. Worth closing before any module starts reassigning students
+between classes.
 
 ---
 
