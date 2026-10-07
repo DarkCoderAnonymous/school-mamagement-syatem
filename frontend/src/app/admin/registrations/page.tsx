@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,7 @@ const STATUS_VARIANT: Record<RegistrationStatus, 'default' | 'secondary' | 'dest
 };
 
 export default function RegistrationsListPage() {
+  const router = useRouter();
   const [status, setStatus] = useState<RegistrationStatus | 'ALL'>('PENDING');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -76,42 +78,57 @@ export default function RegistrationsListPage() {
 
       {query.data && (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>School</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {query.data.items.length === 0 && (
+          <div className="bg-card overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={4} className="text-muted-foreground text-center">
-                    No applications found.
-                  </TableCell>
+                  <TableHead>School</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              )}
-              {query.data.items.map((reg) => (
-                <TableRow key={reg._id} className="cursor-pointer">
-                  <TableCell>
-                    <Link href={`/admin/registrations/${reg._id}`} className="font-medium hover:underline">
-                      {reg.schoolName}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <div>{reg.contactPerson}</div>
-                    <div className="text-muted-foreground text-xs">{reg.email}</div>
-                  </TableCell>
-                  <TableCell>{new Date(reg.createdAt).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANT[reg.status]}>{reg.status}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody className="rows-stagger">
+                {query.data.items.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-muted-foreground text-center">
+                      No applications found.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {query.data.items.map((reg) => (
+                  <TableRow
+                    key={reg._id}
+                    className="focus-visible:outline-ring cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2"
+                    tabIndex={0}
+                    // The whole row opens it, from the keyboard too — not just the name.
+                    onClick={() => router.push(`/admin/registrations/${reg._id}`)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        router.push(`/admin/registrations/${reg._id}`);
+                      }
+                    }}
+                  >
+                    <TableCell>
+                      <Link href={`/admin/registrations/${reg._id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
+                        {reg.schoolName}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <div>{reg.contactPerson}</div>
+                      <div className="text-muted-foreground text-xs">{reg.email}</div>
+                    </TableCell>
+                    <TableCell>{new Date(reg.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <Badge variant={STATUS_VARIANT[reg.status]}>{reg.status}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
 
           <div className="flex items-center justify-between">
             <p className="text-muted-foreground text-sm">

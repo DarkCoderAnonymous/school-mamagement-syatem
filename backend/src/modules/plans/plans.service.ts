@@ -2,6 +2,7 @@ import { Plan } from '../../models/Plan';
 import { AppError } from '../../utils/AppError';
 import { buildPaginationMeta } from '../../utils/response';
 import { parsePaginationQuery } from '../../utils/paginate';
+import { restrictSort, searchRegex } from '../../utils/query';
 import type { CreatePlanInput, UpdatePlanInput } from './plans.validation';
 
 export async function listPublicPlans() {
@@ -10,10 +11,10 @@ export async function listPublicPlans() {
 
 export async function listPlans(query: Record<string, unknown>) {
   const { page, limit, skip, sort, search } = parsePaginationQuery(query);
-  const filter = search ? { $or: [{ name: new RegExp(search, 'i') }, { code: new RegExp(search, 'i') }] } : {};
+  const filter = search ? { $or: [{ name: searchRegex(search) }, { code: searchRegex(search) }] } : {};
 
   const [items, total] = await Promise.all([
-    Plan.find(filter).sort(sort).skip(skip).limit(limit).lean(),
+    Plan.find(filter).sort(restrictSort(sort, ['name', 'code', 'priceMinor', 'createdAt'], { createdAt: -1 })).skip(skip).limit(limit).lean(),
     Plan.countDocuments(filter),
   ]);
 

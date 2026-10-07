@@ -15,6 +15,7 @@
     "test": "jest --runInBand",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
     "backfill:permissions": "tsx src/scripts/backfill-role-permissions.ts",
+    "backfill:teachers": "tsx src/scripts/backfill-teacher-records.ts",
     "migrate:memberships": "tsx src/scripts/migrate-to-memberships.ts",
     "test:cross-tenant": "jest --runInBand test/cross-tenant",
     "check:registry": "tsx scripts/check-registry-coverage.ts"

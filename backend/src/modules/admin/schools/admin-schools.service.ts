@@ -1,8 +1,10 @@
 import { School } from '../../../models/School';
 import { AppError } from '../../../utils/AppError';
 import { buildPaginationMeta } from '../../../utils/response';
+import { restrictSort, searchRegex } from '../../../utils/query';
 import { parsePaginationQuery } from '../../../utils/paginate';
 import { recordAudit } from '../../../utils/audit';
+import { invalidateSchoolAccess } from '../../../services/auth-freshness.service';
 
 interface ActorMeta {
   actorUserId: string;
@@ -18,12 +20,12 @@ export async function listSchools(query: Record<string, unknown>) {
   const { page, limit, skip, sort, search } = parsePaginationQuery(query);
   const filter: Record<string, unknown> = { deletedAt: null };
   if (typeof query.status === 'string') filter.status = query.status;
-  if (search) filter.$or = [{ name: new RegExp(search, 'i') }, { slug: new RegExp(search, 'i') }];
+  if (search) filter.$or = [{ name: searchRegex(search) }, { slug: searchRegex(search) }];
 
   const [items, total] = await Promise.all([
     School.aggregate([
       { $match: filter },
-      { $sort: sort },
+      { $sort: restrictSort(sort, ['name', 'slug', 'status', 'createdAt', 'updatedAt'], { createdAt: -1 }) },
       { $skip: skip },
       { $limit: limit },
       {
@@ -67,6 +69,9 @@ export async function updateSchoolStatus(id: string, status: string, actor: Acto
   const before = school.status;
   school.status = status as typeof school.status;
   await school.save();
+  // Suspending ends its members' sessions on their next request; reactivating
+  // lets them straight back in — neither waits for a cache to expire.
+  invalidateSchoolAccess(String(school._id));
 
   await recordAudit({
     schoolId: school._id,

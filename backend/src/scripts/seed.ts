@@ -2,6 +2,7 @@ import 'dotenv/config';
 import mongoose from 'mongoose';
 import { Role } from '@sms/shared';
 import { connectDB, disconnectDB } from '../db/connection';
+import { assertSafeSeedTarget } from './seed-guard';
 import { TenantContext } from '../tenant/context';
 import { ensureRbacSeeded } from '../rbac/seedRbac';
 import { School } from '../models/School';
@@ -100,6 +101,8 @@ async function seedSuperAdmin() {
 }
 
 async function run(): Promise<void> {
+  // Before any connection: a non-local MONGO_URI stops here, untouched.
+  assertSafeSeedTarget('seed');
   await connectDB();
   // The tenant plugin fails closed, so a script with no request has no
   // tenant context and every tenant-scoped query would throw. Scripts are

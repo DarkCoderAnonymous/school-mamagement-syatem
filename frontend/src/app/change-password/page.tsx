@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Role } from '@sms/shared';
 import { RequireAuth } from '@/components/auth/require-auth';
+import { AlertCircle, CheckCircle2, Loader2, LockKeyhole } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Field } from '@/components/form/field';
+import { PasswordInput } from '@/components/form/password-input';
+import { AuthHeading, AuthShell } from '@/components/public/auth-shell';
 import { changePassword } from '@/lib/api/auth';
 import { ApiRequestError } from '@/lib/api/http';
 import { useAuthStore } from '@/lib/auth-store';
@@ -31,6 +32,7 @@ function ChangePasswordForm() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
   const {
     register,
     handleSubmit,
@@ -41,53 +43,114 @@ function ChangePasswordForm() {
     setServerError(null);
     try {
       await changePassword(currentPassword, newPassword);
-      const isSuperAdmin = user?.roles.includes(Role.SUPER_ADMIN);
-      router.replace(isSuperAdmin ? '/admin' : '/app');
+      // The server ends every session on a password change, this one included
+      // (ADR-005), so the tokens held here are dead — sign in again.
+      setDone(true);
     } catch (err) {
       setServerError(err instanceof ApiRequestError ? err.message : 'Something went wrong.');
     }
   });
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold">Set a new password</h1>
-          <p className="text-muted-foreground text-sm">
-            {user?.mustChangePassword
-              ? 'You must change your temporary password before continuing.'
-              : 'Update your password'}
-          </p>
+  if (done) {
+    return (
+      <AuthShell>
+        <div className="animate-fade-up space-y-8">
+          <AuthHeading
+            icon={<CheckCircle2 className="size-5" aria-hidden="true" />}
+            title="Password updated"
+            description="For your security you've been signed out everywhere. Sign in with your new password."
+          />
+          <Button
+            className="h-10 w-full"
+            onClick={() => {
+              useAuthStore.getState().clear();
+              router.replace('/login');
+            }}
+          >
+            Continue to sign in
+          </Button>
         </div>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell>
+      <div className="animate-fade-up space-y-8">
+        <AuthHeading
+          icon={<LockKeyhole className="size-5" aria-hidden="true" />}
+          title="Set a new password"
+          description={
+            user?.mustChangePassword
+              ? 'You signed in with a temporary password. Choose your own before continuing.'
+              : 'Update the password you use to sign in.'
+          }
+        />
 
         {serverError && (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="animate-shake">
+            <AlertCircle aria-hidden="true" />
             <AlertDescription>{serverError}</AlertDescription>
           </Alert>
         )}
 
-        <form onSubmit={onSubmit} className="space-y-4" noValidate>
-          <div className="space-y-1.5">
-            <Label htmlFor="currentPassword">Current password</Label>
-            <Input id="currentPassword" type="password" autoComplete="current-password" {...register('currentPassword')} />
-            {errors.currentPassword && <p className="text-destructive text-xs">{errors.currentPassword.message}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="newPassword">New password</Label>
-            <Input id="newPassword" type="password" autoComplete="new-password" {...register('newPassword')} />
-            {errors.newPassword && <p className="text-destructive text-xs">{errors.newPassword.message}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="confirmPassword">Confirm new password</Label>
-            <Input id="confirmPassword" type="password" autoComplete="new-password" {...register('confirmPassword')} />
-            {errors.confirmPassword && <p className="text-destructive text-xs">{errors.confirmPassword.message}</p>}
-          </div>
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <form onSubmit={onSubmit} className="space-y-5" noValidate>
+          <Field
+            label="Current password"
+            htmlFor="currentPassword"
+            error={errors.currentPassword?.message}
+          >
+            {({ id, describedBy }) => (
+              <PasswordInput
+                id={id}
+                autoComplete="current-password"
+                aria-invalid={!!errors.currentPassword}
+                aria-describedby={describedBy}
+                className="h-10"
+                {...register('currentPassword')}
+              />
+            )}
+          </Field>
+          <Field
+            label="New password"
+            htmlFor="newPassword"
+            error={errors.newPassword?.message}
+            help="At least 8 characters."
+          >
+            {({ id, describedBy }) => (
+              <PasswordInput
+                id={id}
+                autoComplete="new-password"
+                aria-invalid={!!errors.newPassword}
+                aria-describedby={describedBy}
+                className="h-10"
+                {...register('newPassword')}
+              />
+            )}
+          </Field>
+          <Field
+            label="Confirm new password"
+            htmlFor="confirmPassword"
+            error={errors.confirmPassword?.message}
+          >
+            {({ id, describedBy }) => (
+              <PasswordInput
+                id={id}
+                autoComplete="new-password"
+                aria-invalid={!!errors.confirmPassword}
+                aria-describedby={describedBy}
+                className="h-10"
+                {...register('confirmPassword')}
+              />
+            )}
+          </Field>
+          <Button type="submit" className="h-10 w-full" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="animate-spin" aria-hidden="true" />}
             {isSubmitting ? 'Updating…' : 'Update password'}
           </Button>
         </form>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 

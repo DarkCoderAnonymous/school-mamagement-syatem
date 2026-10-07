@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import slugify from 'slugify';
-import { Role } from '@sms/shared';
+import { DEFAULT_SCHOOL_CURRENCY, Role } from '@sms/shared';
 import { SchoolRegistration } from '../../../models/SchoolRegistration';
 import { School } from '../../../models/School';
 import { Subscription } from '../../../models/Subscription';
@@ -9,6 +9,7 @@ import { User } from '../../../models/User';
 import { SchoolMembership } from '../../../models/SchoolMembership';
 import { AppError } from '../../../utils/AppError';
 import { buildPaginationMeta } from '../../../utils/response';
+import { restrictSort, searchRegex } from '../../../utils/query';
 import { parsePaginationQuery } from '../../../utils/paginate';
 import { generateTempPassword, hashPassword } from '../../../utils/password';
 import { recordAudit } from '../../../utils/audit';
@@ -25,11 +26,11 @@ export async function listRegistrations(query: Record<string, unknown>) {
   const filter: Record<string, unknown> = {};
   if (typeof query.status === 'string') filter.status = query.status;
   if (search) {
-    filter.$or = [{ schoolName: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }];
+    filter.$or = [{ schoolName: searchRegex(search) }, { email: searchRegex(search) }];
   }
 
   const [items, total] = await Promise.all([
-    SchoolRegistration.find(filter).sort(sort).skip(skip).limit(limit).lean(),
+    SchoolRegistration.find(filter).sort(restrictSort(sort, ['schoolName', 'email', 'status', 'createdAt', 'reviewedAt'], { createdAt: -1 })).skip(skip).limit(limit).lean(),
     SchoolRegistration.countDocuments(filter),
   ]);
 
@@ -108,6 +109,9 @@ export async function approveRegistration(id: string, actor: ActorMeta) {
             contactEmail: registration.email,
             contactPhone: registration.phone,
             address: registration.address,
+            // Chosen at registration; fixed from here, since relabelling a
+            // currency later would silently change what every amount means.
+            currency: registration.currency ?? DEFAULT_SCHOOL_CURRENCY,
             status: 'ACTIVE',
             registrationId: registration._id,
             createdBy: new mongoose.Types.ObjectId(actor.actorUserId),
@@ -152,6 +156,13 @@ export async function approveRegistration(id: string, actor: ActorMeta) {
        */
       let adminUser = await User.findOne({ email: registration.email.toLowerCase() }).session(session);
       let tempPassword: string | null = null;
+
+      // A platform account belongs to no school by definition (ADR-001) —
+      // the same rule provisionSchoolAccount enforces. Giving one a membership
+      // would make its next login open that school instead of the console.
+      if (adminUser && adminUser.platformRoleIds.length > 0) {
+        throw AppError.conflict('This email address cannot be used for a school account', { field: 'email' });
+      }
 
       if (!adminUser) {
         tempPassword = generateTempPassword();

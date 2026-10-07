@@ -59,6 +59,10 @@ export function SchoolDetailClient({ id }: { id: string }) {
             <p>{school.contactPhone || '—'}</p>
           </div>
           <div>
+            <p className="text-muted-foreground">Currency</p>
+            <p>{school.currency ?? '—'}</p>
+          </div>
+          <div>
             <p className="text-muted-foreground">Users</p>
             <p>{school.userCount ?? 0}</p>
           </div>

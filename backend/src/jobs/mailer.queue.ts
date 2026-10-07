@@ -1,6 +1,9 @@
 import { Queue } from 'bullmq';
 import { redis } from '../config/redis';
-import type { MailMessage } from '../utils/mailer';
+import { sanitizeHeaderValue, type MailMessage } from '../utils/mailer';
+
+/** Failed mail jobs are kept a week for diagnosis, then dropped. */
+export const MAIL_FAILED_RETENTION_SECONDS = 7 * 24 * 60 * 60;
 
 export const MAILER_QUEUE_NAME = 'mailer';
 
@@ -30,9 +33,14 @@ export async function enqueueMail(message: MailMessage): Promise<void> {
 
   try {
     await Promise.race([
-      mailerQueue.add('send', message, {
+      mailerQueue.add('send', { ...message, to: sanitizeHeaderValue(message.to), subject: sanitizeHeaderValue(message.subject) }, {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
+        // Job data holds the message body — reset tokens, temporary
+        // passwords — so a delivered job must not linger in Redis, and a
+        // failed one only as long as it takes to investigate.
+        removeOnComplete: true,
+        removeOnFail: { age: MAIL_FAILED_RETENTION_SECONDS },
       }),
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Noto_Sans_Arabic, JetBrains_Mono } from 'next/font/google';
+import { Inter, Noto_Sans_Arabic, JetBrains_Mono, Newsreader } from 'next/font/google';
 import './globals.css';
 import { QueryProvider } from '@/components/providers/query-provider';
 import { ThemeProvider } from '@/components/providers/theme-provider';
@@ -35,6 +35,19 @@ const mono = JetBrains_Mono({
   display: 'swap',
 });
 
+/**
+ * Display accent for the public pages only: an italic word or two inside an
+ * Inter headline (`font-display`). Never used in the staff console. The
+ * optical-size axis lets the italic sharpen at hero sizes.
+ */
+const display = Newsreader({
+  variable: '--font-app-display',
+  subsets: ['latin'],
+  style: ['italic'],
+  axes: ['opsz'],
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'School Management System',
   description: 'Multi-tenant School Management SaaS',
@@ -44,8 +57,10 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html
       lang="en"
+      // Keeps route changes instant even where smooth anchor scrolling is on (Next 16).
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
-      className={`${sans.variable} ${arabic.variable} ${mono.variable} h-full antialiased`}
+      className={`${sans.variable} ${arabic.variable} ${mono.variable} ${display.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <ThemeProvider>

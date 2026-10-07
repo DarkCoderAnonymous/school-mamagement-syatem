@@ -2,6 +2,9 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 
+/** The consoles' home pages; a trail that only leads back to one of these is redundant. */
+const ROOT_HREFS = new Set(['/app', '/admin']);
+
 export interface Crumb {
   label: string;
   href?: string;
@@ -25,12 +28,18 @@ export function PageHeader({
   action?: ReactNode;
   meta?: ReactNode;
 }) {
+  // "Dashboard › Students" on a top-level page only repeats the console's top
+  // bar, which already names the section and page. Breadcrumbs earn their
+  // space once there's a real trail back (Students › Noah Garcia).
+  const trail =
+    breadcrumbs && !(breadcrumbs.length <= 2 && ROOT_HREFS.has(breadcrumbs[0]?.href ?? '')) ? breadcrumbs : [];
+
   return (
     <div className="space-y-3">
-      {breadcrumbs && breadcrumbs.length > 0 && (
+      {trail.length > 0 && (
         <nav aria-label="Breadcrumb">
           <ol className="text-muted-foreground flex flex-wrap items-center gap-1 text-xs">
-            {breadcrumbs.map((crumb, i) => (
+            {trail.map((crumb, i) => (
               <li key={`${crumb.label}-${i}`} className="flex items-center gap-1">
                 {i > 0 && <ChevronRight className="size-3" aria-hidden="true" />}
                 {crumb.href ? (
@@ -54,7 +63,7 @@ export function PageHeader({
           {description && <p className="text-muted-foreground text-sm">{description}</p>}
           {meta}
         </div>
-        {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+        {action && <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{action}</div>}
       </div>
     </div>
   );

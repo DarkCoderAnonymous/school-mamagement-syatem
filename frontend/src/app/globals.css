@@ -18,6 +18,8 @@
   --font-sans: var(--font-app-sans), var(--font-app-arabic), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: var(--font-app-mono), ui-monospace, 'SFMono-Regular', 'Liberation Mono', monospace;
   --font-heading: var(--font-sans);
+  /* Public pages only: the italic accent word in a headline. */
+  --font-display: var(--font-app-display), ui-serif, Georgia, serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -43,6 +45,7 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-info-soft: var(--info-soft);
@@ -58,6 +61,11 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-panel: var(--panel);
+  --color-panel-foreground: var(--panel-foreground);
+  --color-panel-muted: var(--panel-muted);
+  --color-panel-border: var(--panel-border);
+  --color-highlight: var(--highlight);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -65,11 +73,25 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /*
+   * Elevation: one scale for every raised surface (docs/design-system.md).
+   * Layered — a tight contact shadow plus a soft ambient one — and tinted
+   * with the ink colour rather than black, so light-theme depth reads as
+   * paper on a desk, not a drop shadow. Dark theme swaps in deeper tints.
+   */
+  --shadow-xs: 0 1px 2px 0 var(--shadow-tint-1);
+  --shadow-sm: 0 1px 2px 0 var(--shadow-tint-1), 0 1px 3px 0 var(--shadow-tint-2);
+  --shadow-md: 0 1px 2px 0 var(--shadow-tint-1), 0 4px 12px -2px var(--shadow-tint-2);
+  --shadow-lg: 0 2px 4px 0 var(--shadow-tint-1), 0 12px 28px -6px var(--shadow-tint-3);
+  --shadow-overlay: 0 0 0 1px var(--overlay-edge), 0 8px 16px -4px var(--shadow-tint-2), 0 24px 56px -12px var(--shadow-tint-3);
+  /* Public pages only: the hero's primary call to action, lit from below in its own colour. */
+  --shadow-glow: 0 1px 2px 0 var(--shadow-tint-1), 0 10px 28px -8px color-mix(in oklch, var(--primary) 65%, transparent);
 }
 
 :root {
   /* See docs/design-system.md. Light is the staff console default. */
-  --background: oklch(0.985 0.003 250);
+  --background: oklch(0.982 0.004 255);
   --foreground: oklch(0.24 0.02 258);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.24 0.02 258);
@@ -92,18 +114,28 @@
   --warning: oklch(0.7 0.14 75);
   --warning-foreground: oklch(0.26 0.05 75);
   --warning-soft: oklch(0.96 0.05 85);
+  /*
+   * Amber TEXT on a soft tint or a plain surface. `--warning-foreground` is
+   * for text on SOLID amber — near-black in dark mode, so it vanished on the
+   * soft tint. Light keeps the deep amber it already had.
+   */
+  --warning-ink: var(--warning-foreground);
   --info: oklch(0.58 0.11 235);
   --info-foreground: oklch(0.99 0.002 250);
   --info-soft: oklch(0.95 0.03 235);
-  --border: oklch(0.9 0.008 256);
-  --input: oklch(0.9 0.008 256);
+  --border: oklch(0.912 0.007 256);
+  --input: oklch(0.89 0.009 256);
   --ring: oklch(0.52 0.15 256);
   --chart-1: oklch(0.52 0.15 256);
   --chart-2: oklch(0.6 0.12 190);
   --chart-3: oklch(0.65 0.13 145);
   --chart-4: oklch(0.72 0.14 75);
   --chart-5: oklch(0.58 0.16 320);
-  --radius: 0.5rem;
+  --radius: 0.625rem;
+  --shadow-tint-1: oklch(0.24 0.02 258 / 5%);
+  --shadow-tint-2: oklch(0.24 0.02 258 / 7%);
+  --shadow-tint-3: oklch(0.24 0.02 258 / 13%);
+  --overlay-edge: oklch(0.24 0.02 258 / 6%);
   --sidebar: oklch(0.995 0.002 250);
   --sidebar-foreground: oklch(0.24 0.02 258);
   --sidebar-primary: oklch(0.52 0.15 256);
@@ -112,6 +144,18 @@
   --sidebar-accent-foreground: oklch(0.34 0.06 256);
   --sidebar-border: oklch(0.9 0.008 256);
   --sidebar-ring: oklch(0.52 0.15 256);
+  /* Brand panel on the public/auth pages: a deep, desaturated take on the
+     accent so white type reads at AA without competing with the form. */
+  --panel: oklch(0.29 0.06 258);
+  --panel-foreground: oklch(0.98 0.004 250);
+  --panel-muted: oklch(0.8 0.03 256);
+  --panel-border: oklch(1 0 0 / 12%);
+  /*
+   * Warm counterpoint to the blue, for the public pages' decoration only (the
+   * headline underline, glows, the "new" dot). Never text, never a status —
+   * amber already means "due soon" inside the product.
+   */
+  --highlight: oklch(0.72 0.17 52);
 }
 
 .dark {
@@ -138,13 +182,15 @@
   --warning: oklch(0.8 0.14 80);
   --warning-foreground: oklch(0.2 0.04 80);
   --warning-soft: oklch(0.32 0.07 80);
+  --warning-ink: var(--warning);
   --info: oklch(0.74 0.11 235);
   --info-foreground: oklch(0.17 0.02 235);
   --info-soft: oklch(0.29 0.06 235);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
   --ring: oklch(0.68 0.14 256);
-  --chart-1: oklch(0.68 0.14 256);
+  /* Stepped to L 0.64 so a lone series sits inside the dark chart lightness band (dataviz validator). */
+  --chart-1: oklch(0.64 0.14 256);
   --chart-2: oklch(0.72 0.11 190);
   --chart-3: oklch(0.75 0.13 145);
   --chart-4: oklch(0.8 0.14 80);
@@ -157,6 +203,477 @@
   --sidebar-accent-foreground: oklch(0.92 0.03 256);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: oklch(0.68 0.14 256);
+  --panel: oklch(0.215 0.03 258);
+  --panel-foreground: oklch(0.97 0.004 250);
+  --panel-muted: oklch(0.76 0.03 254);
+  --panel-border: oklch(1 0 0 / 10%);
+  --highlight: oklch(0.79 0.15 58);
+  --shadow-tint-1: oklch(0 0 0 / 22%);
+  --shadow-tint-2: oklch(0 0 0 / 30%);
+  --shadow-tint-3: oklch(0 0 0 / 50%);
+  /* A hairline of light on overlays, so a dialog's edge reads against a dark page. */
+  --overlay-edge: oklch(1 0 0 / 7%);
+}
+
+/*
+ * School palettes — the accent a school admin picks in Settings (`School.theme`,
+ * list in shared/src/theme.ts). The app shell sets `data-palette` on <html>;
+ * without it (public pages, super admin, the default) the blue above applies.
+ *
+ * Only the accent family moves: primary, accent, ring, chart-1 and their
+ * sidebar twins. Neutrals and status colours never change, so a school's
+ * colour can't be mistaken for "overdue" or "paid". Every palette keeps the
+ * default's lightness steps — button text ≥ 5.4:1 and accent-coloured links
+ * ≥ 5.4:1 on the page in both themes — and sits at least as far from the
+ * status hues as the default blue does. Out-of-gamut tokens were brought into
+ * sRGB by lowering chroma only (lightness, so contrast, untouched).
+ *
+ * `.dark[data-palette]` outranks the light rule, so dark mode always wins; the
+ * descendant form lets a Settings preview card carry its own palette. Blue is
+ * listed too (the base values again) so its preview isn't tinted by the page's.
+ * Mobile generates its palettes from these blocks (mobile: npm run theme).
+ */
+[data-palette='blue'] {
+  --primary: oklch(0.52 0.15 256);
+  --primary-foreground: oklch(0.99 0.002 256);
+  --accent: oklch(0.95 0.015 256);
+  --accent-foreground: oklch(0.34 0.06 256);
+  --ring: oklch(0.52 0.15 256);
+  --chart-1: oklch(0.52 0.15 256);
+  --sidebar-primary: oklch(0.52 0.15 256);
+  --sidebar-primary-foreground: oklch(0.99 0.002 256);
+  --sidebar-accent: oklch(0.95 0.015 256);
+  --sidebar-accent-foreground: oklch(0.34 0.06 256);
+  --sidebar-ring: oklch(0.52 0.15 256);
+}
+.dark[data-palette='blue'],
+.dark [data-palette='blue'] {
+  --primary: oklch(0.68 0.14 256);
+  --primary-foreground: oklch(0.17 0.02 256);
+  --accent: oklch(0.3 0.035 256);
+  --accent-foreground: oklch(0.92 0.03 256);
+  --ring: oklch(0.68 0.14 256);
+  --chart-1: oklch(0.64 0.14 256);
+  --sidebar-primary: oklch(0.68 0.14 256);
+  --sidebar-primary-foreground: oklch(0.17 0.02 256);
+  --sidebar-accent: oklch(0.3 0.035 256);
+  --sidebar-accent-foreground: oklch(0.92 0.03 256);
+  --sidebar-ring: oklch(0.68 0.14 256);
+}
+[data-palette='indigo'] {
+  --primary: oklch(0.5 0.17 277);
+  --primary-foreground: oklch(0.99 0.002 277);
+  --accent: oklch(0.95 0.015 277);
+  --accent-foreground: oklch(0.34 0.06 277);
+  --ring: oklch(0.5 0.17 277);
+  --chart-1: oklch(0.5 0.17 277);
+  --sidebar-primary: oklch(0.5 0.17 277);
+  --sidebar-primary-foreground: oklch(0.99 0.002 277);
+  --sidebar-accent: oklch(0.95 0.015 277);
+  --sidebar-accent-foreground: oklch(0.34 0.06 277);
+  --sidebar-ring: oklch(0.5 0.17 277);
+}
+.dark[data-palette='indigo'],
+.dark [data-palette='indigo'] {
+  --primary: oklch(0.68 0.14 277);
+  --primary-foreground: oklch(0.17 0.02 277);
+  --accent: oklch(0.3 0.035 277);
+  --accent-foreground: oklch(0.92 0.03 277);
+  --ring: oklch(0.68 0.14 277);
+  --chart-1: oklch(0.64 0.14 277);
+  --sidebar-primary: oklch(0.68 0.14 277);
+  --sidebar-primary-foreground: oklch(0.17 0.02 277);
+  --sidebar-accent: oklch(0.3 0.035 277);
+  --sidebar-accent-foreground: oklch(0.92 0.03 277);
+  --sidebar-ring: oklch(0.68 0.14 277);
+}
+[data-palette='violet'] {
+  --primary: oklch(0.5 0.17 300);
+  --primary-foreground: oklch(0.99 0.002 300);
+  --accent: oklch(0.95 0.015 300);
+  --accent-foreground: oklch(0.34 0.06 300);
+  --ring: oklch(0.5 0.17 300);
+  --chart-1: oklch(0.5 0.17 300);
+  --sidebar-primary: oklch(0.5 0.17 300);
+  --sidebar-primary-foreground: oklch(0.99 0.002 300);
+  --sidebar-accent: oklch(0.95 0.015 300);
+  --sidebar-accent-foreground: oklch(0.34 0.06 300);
+  --sidebar-ring: oklch(0.5 0.17 300);
+}
+.dark[data-palette='violet'],
+.dark [data-palette='violet'] {
+  --primary: oklch(0.7 0.14 300);
+  --primary-foreground: oklch(0.17 0.02 300);
+  --accent: oklch(0.3 0.035 300);
+  --accent-foreground: oklch(0.92 0.03 300);
+  --ring: oklch(0.7 0.14 300);
+  --chart-1: oklch(0.66 0.14 300);
+  --sidebar-primary: oklch(0.7 0.14 300);
+  --sidebar-primary-foreground: oklch(0.17 0.02 300);
+  --sidebar-accent: oklch(0.3 0.035 300);
+  --sidebar-accent-foreground: oklch(0.92 0.03 300);
+  --sidebar-ring: oklch(0.7 0.14 300);
+}
+[data-palette='plum'] {
+  --primary: oklch(0.5 0.16 335);
+  --primary-foreground: oklch(0.99 0.002 335);
+  --accent: oklch(0.95 0.015 335);
+  --accent-foreground: oklch(0.34 0.06 335);
+  --ring: oklch(0.5 0.16 335);
+  --chart-1: oklch(0.5 0.16 335);
+  --sidebar-primary: oklch(0.5 0.16 335);
+  --sidebar-primary-foreground: oklch(0.99 0.002 335);
+  --sidebar-accent: oklch(0.95 0.015 335);
+  --sidebar-accent-foreground: oklch(0.34 0.06 335);
+  --sidebar-ring: oklch(0.5 0.16 335);
+}
+.dark[data-palette='plum'],
+.dark [data-palette='plum'] {
+  --primary: oklch(0.7 0.14 335);
+  --primary-foreground: oklch(0.17 0.02 335);
+  --accent: oklch(0.3 0.035 335);
+  --accent-foreground: oklch(0.92 0.03 335);
+  --ring: oklch(0.7 0.14 335);
+  --chart-1: oklch(0.66 0.14 335);
+  --sidebar-primary: oklch(0.7 0.14 335);
+  --sidebar-primary-foreground: oklch(0.17 0.02 335);
+  --sidebar-accent: oklch(0.3 0.035 335);
+  --sidebar-accent-foreground: oklch(0.92 0.03 335);
+  --sidebar-ring: oklch(0.7 0.14 335);
+}
+[data-palette='rose'] {
+  --primary: oklch(0.52 0.17 355);
+  --primary-foreground: oklch(0.99 0.002 355);
+  --accent: oklch(0.95 0.015 355);
+  --accent-foreground: oklch(0.34 0.06 355);
+  --ring: oklch(0.52 0.17 355);
+  --chart-1: oklch(0.52 0.17 355);
+  --sidebar-primary: oklch(0.52 0.17 355);
+  --sidebar-primary-foreground: oklch(0.99 0.002 355);
+  --sidebar-accent: oklch(0.95 0.015 355);
+  --sidebar-accent-foreground: oklch(0.34 0.06 355);
+  --sidebar-ring: oklch(0.52 0.17 355);
+}
+.dark[data-palette='rose'],
+.dark [data-palette='rose'] {
+  --primary: oklch(0.7 0.14 355);
+  --primary-foreground: oklch(0.17 0.02 355);
+  --accent: oklch(0.3 0.035 355);
+  --accent-foreground: oklch(0.92 0.03 355);
+  --ring: oklch(0.7 0.14 355);
+  --chart-1: oklch(0.66 0.14 355);
+  --sidebar-primary: oklch(0.7 0.14 355);
+  --sidebar-primary-foreground: oklch(0.17 0.02 355);
+  --sidebar-accent: oklch(0.3 0.035 355);
+  --sidebar-accent-foreground: oklch(0.92 0.03 355);
+  --sidebar-ring: oklch(0.7 0.14 355);
+}
+[data-palette='bronze'] {
+  --primary: oklch(0.5 0.1 60);
+  --primary-foreground: oklch(0.99 0.002 60);
+  --accent: oklch(0.95 0.015 60);
+  --accent-foreground: oklch(0.34 0.06 60);
+  --ring: oklch(0.5 0.1 60);
+  --chart-1: oklch(0.5 0.1 60);
+  --sidebar-primary: oklch(0.5 0.1 60);
+  --sidebar-primary-foreground: oklch(0.99 0.002 60);
+  --sidebar-accent: oklch(0.95 0.015 60);
+  --sidebar-accent-foreground: oklch(0.34 0.06 60);
+  --sidebar-ring: oklch(0.5 0.1 60);
+}
+.dark[data-palette='bronze'],
+.dark [data-palette='bronze'] {
+  --primary: oklch(0.74 0.11 60);
+  --primary-foreground: oklch(0.17 0.02 60);
+  --accent: oklch(0.3 0.035 60);
+  --accent-foreground: oklch(0.92 0.03 60);
+  --ring: oklch(0.74 0.11 60);
+  --chart-1: oklch(0.7 0.11 60);
+  --sidebar-primary: oklch(0.74 0.11 60);
+  --sidebar-primary-foreground: oklch(0.17 0.02 60);
+  --sidebar-accent: oklch(0.3 0.035 60);
+  --sidebar-accent-foreground: oklch(0.92 0.03 60);
+  --sidebar-ring: oklch(0.74 0.11 60);
+}
+[data-palette='teal'] {
+  --primary: oklch(0.5 0.085 195);
+  --primary-foreground: oklch(0.99 0.002 195);
+  --accent: oklch(0.95 0.015 195);
+  --accent-foreground: oklch(0.34 0.058 195);
+  --ring: oklch(0.5 0.085 195);
+  --chart-1: oklch(0.5 0.085 195);
+  --sidebar-primary: oklch(0.5 0.085 195);
+  --sidebar-primary-foreground: oklch(0.99 0.002 195);
+  --sidebar-accent: oklch(0.95 0.015 195);
+  --sidebar-accent-foreground: oklch(0.34 0.058 195);
+  --sidebar-ring: oklch(0.5 0.085 195);
+}
+.dark[data-palette='teal'],
+.dark [data-palette='teal'] {
+  --primary: oklch(0.72 0.09 195);
+  --primary-foreground: oklch(0.17 0.02 195);
+  --accent: oklch(0.3 0.035 195);
+  --accent-foreground: oklch(0.92 0.03 195);
+  --ring: oklch(0.72 0.09 195);
+  --chart-1: oklch(0.68 0.09 195);
+  --sidebar-primary: oklch(0.72 0.09 195);
+  --sidebar-primary-foreground: oklch(0.17 0.02 195);
+  --sidebar-accent: oklch(0.3 0.035 195);
+  --sidebar-accent-foreground: oklch(0.92 0.03 195);
+  --sidebar-ring: oklch(0.72 0.09 195);
+}
+[data-palette='emerald'] {
+  --primary: oklch(0.44 0.085 172);
+  --primary-foreground: oklch(0.99 0.002 172);
+  --accent: oklch(0.95 0.015 172);
+  --accent-foreground: oklch(0.34 0.06 172);
+  --ring: oklch(0.44 0.085 172);
+  --chart-1: oklch(0.44 0.085 172);
+  --sidebar-primary: oklch(0.44 0.085 172);
+  --sidebar-primary-foreground: oklch(0.99 0.002 172);
+  --sidebar-accent: oklch(0.95 0.015 172);
+  --sidebar-accent-foreground: oklch(0.34 0.06 172);
+  --sidebar-ring: oklch(0.44 0.085 172);
+}
+.dark[data-palette='emerald'],
+.dark [data-palette='emerald'] {
+  --primary: oklch(0.72 0.1 172);
+  --primary-foreground: oklch(0.17 0.02 172);
+  --accent: oklch(0.3 0.035 172);
+  --accent-foreground: oklch(0.92 0.03 172);
+  --ring: oklch(0.72 0.1 172);
+  --chart-1: oklch(0.68 0.1 172);
+  --sidebar-primary: oklch(0.72 0.1 172);
+  --sidebar-primary-foreground: oklch(0.17 0.02 172);
+  --sidebar-accent: oklch(0.3 0.035 172);
+  --sidebar-accent-foreground: oklch(0.92 0.03 172);
+  --sidebar-ring: oklch(0.72 0.1 172);
+}
+[data-palette='slate'] {
+  --primary: oklch(0.42 0.04 256);
+  --primary-foreground: oklch(0.99 0.002 256);
+  --accent: oklch(0.95 0.015 256);
+  --accent-foreground: oklch(0.34 0.06 256);
+  --ring: oklch(0.42 0.04 256);
+  --chart-1: oklch(0.42 0.04 256);
+  --sidebar-primary: oklch(0.42 0.04 256);
+  --sidebar-primary-foreground: oklch(0.99 0.002 256);
+  --sidebar-accent: oklch(0.95 0.015 256);
+  --sidebar-accent-foreground: oklch(0.34 0.06 256);
+  --sidebar-ring: oklch(0.42 0.04 256);
+}
+.dark[data-palette='slate'],
+.dark [data-palette='slate'] {
+  --primary: oklch(0.74 0.04 256);
+  --primary-foreground: oklch(0.17 0.02 256);
+  --accent: oklch(0.3 0.035 256);
+  --accent-foreground: oklch(0.92 0.03 256);
+  --ring: oklch(0.74 0.04 256);
+  --chart-1: oklch(0.7 0.04 256);
+  --sidebar-primary: oklch(0.74 0.04 256);
+  --sidebar-primary-foreground: oklch(0.17 0.02 256);
+  --sidebar-accent: oklch(0.3 0.035 256);
+  --sidebar-accent-foreground: oklch(0.92 0.03 256);
+  --sidebar-ring: oklch(0.74 0.04 256);
+}
+
+/*
+ * Motion tokens (public pages). One shared rhythm rather than a duration per
+ * component: things ARRIVING decelerate (--ease-emphasized); confirmations get
+ * a slight overshoot (--ease-spring). Everything animates transform/opacity
+ * only, so nothing reflows. `--delay` staggers siblings — see lib/motion.ts.
+ * Reduced-motion users get the final state immediately (base layer below).
+ */
+@theme {
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+  /* Leaving accelerates away; used on exits, which also run shorter (~65% of the entry). */
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /*
+   * Every `transition-*` utility in the app defaults to this rhythm: quick
+   * enough that a hover never lags the pointer, decelerating so it settles
+   * rather than stops. Components override only when distance demands it.
+   */
+  --default-transition-duration: 160ms;
+  --default-transition-timing-function: var(--ease-emphasized);
+
+  /* Staff console: a page settles in on navigation — short, small, no bounce. */
+  --animate-page-in: page-in 260ms var(--ease-emphasized) backwards;
+  /* Loading placeholders: a slow sweep reads as "working", where a blink reads as "broken". */
+  --animate-shimmer: shimmer 1.8s linear infinite;
+
+  --animate-fade-up: fade-up 560ms var(--ease-emphasized) var(--delay, 0ms) both;
+  --animate-fade-in: fade-in 420ms var(--ease-emphasized) var(--delay, 0ms) both;
+  --animate-step-forward: step-forward 320ms var(--ease-emphasized) both;
+  --animate-step-back: step-back 320ms var(--ease-emphasized) both;
+  --animate-pop: pop 520ms var(--ease-spring) var(--delay, 0ms) both;
+  --animate-shake: shake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  --animate-grow-y: grow-y 520ms var(--ease-emphasized) var(--delay, 0ms) both;
+  /* Bars that fill from the left to their inline scaleX() — the keyframe has no `to`. */
+  --animate-grow-x: grow-x 640ms var(--ease-emphasized) var(--delay, 0ms) both;
+  /*
+   * Table rows arriving (a new page, sort or filter): a short 4px rise. Fill is
+   * `backwards`, not `both`, so no transform is left on the <tr> afterwards —
+   * a lingering transform would become the containing block for anything
+   * fixed inside the row.
+   */
+  --animate-row-in: row-in 240ms var(--ease-emphasized) var(--delay, 0ms) backwards;
+
+  /*
+   * Public pages only. Ambient motion is slow and small so it reads as the page
+   * breathing, not as something asking to be clicked; reduced motion stops all
+   * of it (base layer below), and the marquee has its own pause button.
+   */
+  --animate-drift: drift 18s ease-in-out infinite alternate;
+  --animate-float: float 7s ease-in-out var(--delay, 0ms) infinite;
+  --animate-marquee: marquee 48s linear infinite;
+  /*
+   * An SVG stroke drawing itself: give the path pathLength="1" and
+   * stroke-dasharray="1 1.1". The gap is longer than the path and the start
+   * offset overshoots it, so no zero-length dash leaves a round-cap dot behind
+   * before drawing starts.
+   */
+  --animate-draw: draw 900ms var(--ease-emphasized) var(--delay, 0ms) both;
+
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(6px); }
+  }
+  @keyframes shimmer {
+    from { background-position: 150% 0; }
+    to { background-position: -150% 0; }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(14px); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+  }
+  /* Forward moves in from the right, back from the left — direction matches the step order. */
+  @keyframes step-forward {
+    from { opacity: 0; transform: translateX(24px); }
+  }
+  @keyframes step-back {
+    from { opacity: 0; transform: translateX(-24px); }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.6); }
+  }
+  @keyframes shake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+  }
+  @keyframes grow-y {
+    from { transform: scaleY(0); }
+  }
+  @keyframes grow-x {
+    from { transform: scaleX(0); }
+  }
+  @keyframes row-in {
+    from { opacity: 0; transform: translateY(4px); }
+  }
+  @keyframes drift {
+    from { transform: translate3d(-2%, -1%, 0) scale(1); }
+    to { transform: translate3d(2%, 2%, 0) scale(1.06); }
+  }
+  @keyframes float {
+    50% { transform: translateY(-8px); }
+  }
+  @keyframes marquee {
+    to { transform: translateX(-50%); }
+  }
+  @keyframes draw {
+    from { stroke-dashoffset: 1.05; }
+    to { stroke-dashoffset: 0; }
+  }
+}
+
+/*
+ * Rows settle in as they are INSERTED — CSS animations run on insertion, so a
+ * new page, sort or filter (new row keys) animates, while re-renders that keep
+ * the same rows (selecting, typing a mark, a background refetch) don't replay.
+ * 30ms per row, capped at the tenth so a 50-row page never reads as a slow
+ * cascade. Put it on a <tbody> or a list; reduced motion gets rows at once.
+ */
+@utility rows-stagger {
+  & > * {
+    animation: var(--animate-row-in);
+  }
+  & > :nth-child(2) { --delay: 30ms; }
+  & > :nth-child(3) { --delay: 60ms; }
+  & > :nth-child(4) { --delay: 90ms; }
+  & > :nth-child(5) { --delay: 120ms; }
+  & > :nth-child(6) { --delay: 150ms; }
+  & > :nth-child(7) { --delay: 180ms; }
+  & > :nth-child(8) { --delay: 210ms; }
+  & > :nth-child(9) { --delay: 240ms; }
+  & > :nth-child(n + 10) { --delay: 270ms; }
+}
+
+/*
+ * A wide table's horizontal overflow, made visible: soft shadows appear on the
+ * edge that has more columns beyond it and disappear at the end of the scroll
+ * (the `local` covers scroll with the content; the `scroll` shadows stay put).
+ */
+@utility scroll-shadow-x {
+  background:
+    linear-gradient(to right, var(--color-card) 30%, transparent) left center / 3rem 100% no-repeat local,
+    linear-gradient(to left, var(--color-card) 30%, transparent) right center / 3rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--shadow-tint-3), transparent) left center / 0.875rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--shadow-tint-3), transparent) right center / 0.875rem 100% no-repeat scroll;
+}
+
+/*
+ * Scroll reveal (components/public/reveal.tsx). The hidden state is applied by
+ * script only to elements that start below the fold, so without JavaScript —
+ * or for a crawler — everything is simply visible.
+ */
+[data-reveal='hidden'] {
+  opacity: 0;
+  transform: translateY(14px);
+}
+[data-reveal='shown'] {
+  transition:
+    opacity 500ms var(--ease-emphasized),
+    transform 620ms var(--ease-emphasized);
+  transition-delay: var(--delay, 0ms);
+}
+
+/* In-page anchors (#features, #plans) glide on the landing page only. */
+html:has([data-landing]) {
+  scroll-behavior: smooth;
+}
+
+/*
+ * Faint hairline grid for the public pages' brand panel and hero. Drawn in
+ * the current text colour at low alpha so it follows both themes, and faded
+ * out with a radial mask so it never reaches the content edge as a hard line.
+ */
+@utility bg-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, currentColor 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, currentColor 7%, transparent) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse at top, black 30%, transparent 75%);
+}
+
+/*
+ * Soft colour light behind the public hero, auth panel and closing CTA: the
+ * accent, the warm highlight and a teal from the chart ramp, each fading out
+ * well before its edge. Pair with `animate-drift` on an oversized layer.
+ */
+@utility bg-aurora {
+  background:
+    radial-gradient(42% 52% at 18% 12%, color-mix(in oklch, var(--primary) 24%, transparent), transparent 70%),
+    radial-gradient(34% 44% at 86% 18%, color-mix(in oklch, var(--highlight) 20%, transparent), transparent 70%),
+    radial-gradient(40% 42% at 62% 92%, color-mix(in oklch, var(--chart-2) 16%, transparent), transparent 70%);
+}
+
+/* Fades a horizontally scrolling strip out at both ends instead of cutting it off. */
+@utility mask-fade-x {
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
 }
 
 @layer base {
@@ -165,9 +682,54 @@
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /*
+     * Inter's tailed `l` (cv05) and serifed `I` (cv08): the same 1/l/I
+     * disambiguation that chose Inter, finished off for names, codes and
+     * admission numbers read on screen.
+     */
+    font-feature-settings: 'cv05', 'cv08';
   }
   html {
     @apply font-sans;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 20%, transparent) transparent;
+  }
+  /* Display type tightens as it grows; headings never leave a lone word on a line. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    letter-spacing: -0.011em;
+  }
+  h1 {
+    letter-spacing: -0.021em;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+  /*
+   * Bordered card surfaces (`bg-card border`, used directly by many screens
+   * as well as by <Card>) sit one elevation step above the canvas. :where()
+   * keeps this at zero specificity, so any shadow-* class still wins.
+   */
+  :where(.bg-card.border) {
+    box-shadow: var(--shadow-xs);
+  }
+  /* Everything clickable says so. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  [role='menuitem'],
+  [role='option'],
+  summary,
+  label[for] {
+    cursor: pointer;
   }
   /*
    * Digits must line up in a column of fees, marks or attendance counts.
@@ -179,13 +741,24 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+  /*
+   * Identifiers (admission, invoice, receipt, employee codes) are read and
+   * compared whole — INV-2026-00072 split over three lines is unreadable. In a
+   * table they keep one line and the table scrolls sideways instead.
+   */
+  table .font-mono {
+    white-space: nowrap;
+  }
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
+      /* Staggers would otherwise leave elements invisible for their delay. */
+      animation-delay: 0ms !important;
       transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
       scroll-behavior: auto !important;
     }
   }

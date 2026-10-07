@@ -30,10 +30,13 @@ const ALL = '__all';
  */
 export function FilterBar({
   searchPlaceholder = 'Search…',
+  searchable = true,
   filters = [],
   children,
 }: {
   searchPlaceholder?: string;
+  /** False for lists whose endpoint has no text search — never show a box that does nothing. */
+  searchable?: boolean;
   filters?: SelectFilter[];
   children?: React.ReactNode;
 }) {
@@ -62,16 +65,18 @@ export function FilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
-        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={searchPlaceholder}
-          className="pl-9"
-          aria-label={searchPlaceholder}
-        />
-      </div>
+      {searchable && (
+        <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="pl-9"
+            aria-label={searchPlaceholder}
+          />
+        </div>
+      )}
 
       {filters.map((filter) => (
         <Select
@@ -80,10 +85,19 @@ export function FilterBar({
           onValueChange={(value) => url.set({ [filter.key]: value === ALL ? undefined : value })}
         >
           <SelectTrigger className="w-auto min-w-[9rem]" aria-label={filter.label}>
-            <SelectValue placeholder={filter.label} />
+            {/* Without a render function the trigger shows the raw value ("__all",
+                or an ObjectId). Label + choice keeps each filter identifiable. */}
+            <SelectValue placeholder={filter.label}>
+              {(value: string) => (
+                <span className="truncate">
+                  <span className="text-muted-foreground">{filter.label}:</span>{' '}
+                  {value === ALL || !value ? 'All' : (filter.options.find((o) => o.value === value)?.label ?? 'All')}
+                </span>
+              )}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>All {filter.label.toLowerCase()}</SelectItem>
+            <SelectItem value={ALL}>Any {filter.label.toLowerCase()}</SelectItem>
             {filter.options.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}

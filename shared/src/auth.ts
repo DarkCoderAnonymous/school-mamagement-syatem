@@ -17,6 +17,10 @@ export interface AuthUser {
   schoolName: string | null;
   schoolLogoUrl: string | null;
   schoolPrimaryColor: string | null;
+  /** ISO 4217 code money is shown in for the active school; null for a platform SUPER_ADMIN. */
+  schoolCurrency: string | null;
+  /** The active school's accent palette (SCHOOL_THEMES key); null for a platform SUPER_ADMIN. */
+  schoolTheme: string | null;
   /** Role names for the ACTIVE membership only. */
   roles: string[];
   /** Permissions for the ACTIVE membership only. */

@@ -39,7 +39,7 @@ export const listAcademicSessionsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   sort: z.string().optional(),
-  search: z.string().optional(),
+  search: z.string().max(100).optional(),
   isCurrent: z
     .enum(['true', 'false'])
     .optional()

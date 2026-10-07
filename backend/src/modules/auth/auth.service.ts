@@ -7,8 +7,8 @@ import type {
   RefreshResponse,
   SessionResponse,
 } from '@sms/shared';
+import { DEFAULT_SCHOOL_CURRENCY, DEFAULT_SCHOOL_THEME } from '@sms/shared';
 import { School } from '../../models/School';
-import { Subscription } from '../../models/Subscription';
 import { RoleModel } from '../../models/Role';
 import { SchoolMembership, type SchoolMembershipDoc } from '../../models/SchoolMembership';
 import { User, type UserDoc } from '../../models/User';
@@ -26,7 +26,7 @@ import {
 import { recordAudit } from '../../utils/audit';
 import { enqueueMail } from '../../jobs/mailer.queue';
 import { TenantContext } from '../../tenant/context';
-import { revokeAllSessions } from '../../services/auth-freshness.service';
+import { revokeAllSessions, SCHOOL_BLOCK_MESSAGE, schoolBlockFromDb } from '../../services/auth-freshness.service';
 
 export interface RequestMeta {
   ip?: string;
@@ -39,12 +39,20 @@ interface ResolvedMembership {
   schoolName: string;
   schoolLogoUrl: string | null;
   schoolPrimaryColor: string | null;
+  schoolCurrency: string;
+  schoolTheme: string;
   roleNames: string[];
   permissions: string[];
 }
 
-async function resolveRolesAndPermissions(roleIds: Types.ObjectId[]) {
-  const roles = await RoleModel.find({ _id: { $in: roleIds } }).lean();
+/**
+ * The live roles among `roleIds` that belong to `schoolId` (null: platform
+ * roles). roleIds are validated when assigned, so this is defence in depth: a
+ * deleted custom role, or an id that somehow names another school's role,
+ * grants nothing.
+ */
+async function resolveRolesAndPermissions(roleIds: Types.ObjectId[], schoolId: Types.ObjectId | null) {
+  const roles = await RoleModel.find({ _id: { $in: roleIds }, schoolId, deletedAt: null }).lean();
   const permissions = Array.from(new Set(roles.flatMap((r) => r.permissions)));
   const roleNames = roles.map((r) => r.name);
   return { roleNames, permissions };
@@ -64,7 +72,7 @@ async function loadActiveMemberships(userId: Types.ObjectId | string): Promise<S
 async function resolveMembership(membership: SchoolMembershipDoc): Promise<ResolvedMembership> {
   const [school, { roleNames, permissions }] = await Promise.all([
     School.findById(membership.schoolId).lean(),
-    resolveRolesAndPermissions(membership.roleIds),
+    resolveRolesAndPermissions(membership.roleIds, membership.schoolId),
   ]);
 
   return {
@@ -72,6 +80,8 @@ async function resolveMembership(membership: SchoolMembershipDoc): Promise<Resol
     schoolName: school?.name ?? '',
     schoolLogoUrl: school?.logoUrl ?? null,
     schoolPrimaryColor: school?.primaryColor ?? null,
+    schoolCurrency: school?.currency || DEFAULT_SCHOOL_CURRENCY,
+    schoolTheme: school?.theme || DEFAULT_SCHOOL_THEME,
     roleNames,
     permissions,
   };
@@ -92,7 +102,7 @@ async function toSummaries(memberships: SchoolMembershipDoc[]): Promise<Membersh
 
 /** A platform account belongs to no school — today only SUPER_ADMIN. */
 async function resolvePlatformRoles(user: HydratedDocument<UserDoc> | UserDoc) {
-  return resolveRolesAndPermissions(user.platformRoleIds ?? []);
+  return resolveRolesAndPermissions(user.platformRoleIds ?? [], null);
 }
 
 async function buildAuthUser(
@@ -112,6 +122,8 @@ async function buildAuthUser(
     schoolName: active?.schoolName ?? null,
     schoolLogoUrl: active?.schoolLogoUrl ?? null,
     schoolPrimaryColor: active?.schoolPrimaryColor ?? null,
+    schoolCurrency: active?.schoolCurrency ?? null,
+    schoolTheme: active?.schoolTheme ?? null,
     roles: active ? active.roleNames : (platform?.roleNames ?? []),
     permissions: active ? active.permissions : (platform?.permissions ?? []),
     mustChangePassword: Boolean(user.mustChangePassword),
@@ -120,20 +132,14 @@ async function buildAuthUser(
 }
 
 /**
- * Blocks a login into a school that can't currently be used. Checked at
- * selection time rather than at password time, because with several
- * memberships only one of them may be suspended.
+ * Blocks a login, school switch or refresh into a school that can't
+ * currently be used. Checked at selection time rather than at password time,
+ * because with several memberships only one of them may be suspended. Every
+ * request makes the same check through the cache (`assertTokenFresh`).
  */
 async function assertSchoolUsable(schoolId: Types.ObjectId): Promise<void> {
-  const school = await School.findById(schoolId).lean();
-  if (school && school.status === 'SUSPENDED') {
-    throw new AppError(403, 'SCHOOL_SUSPENDED', "This school's account has been suspended");
-  }
-
-  const subscription = await Subscription.findOne({ schoolId }).sort({ createdAt: -1 }).lean();
-  if (subscription && ['SUSPENDED', 'CANCELLED'].includes(subscription.status ?? '')) {
-    throw new AppError(403, 'SUBSCRIPTION_INACTIVE', "This school's subscription is not active");
-  }
+  const block = await schoolBlockFromDb(String(schoolId));
+  if (block) throw new AppError(403, block, SCHOOL_BLOCK_MESSAGE[block]);
 }
 
 async function issueTokens(
@@ -149,13 +155,17 @@ async function issueTokens(
     sub: String(user._id),
     membershipId: active ? String(active.membership._id) : null,
     schoolId: active ? String(active.membership.schoolId) : null,
-    isSuperAdmin: roleNames.includes('SUPER_ADMIN'),
+    // Only a platform account (no membership) can be SUPER_ADMIN. Deciding by
+    // role name alone would make a school role that happened to be called
+    // SUPER_ADMIN a tenant-isolation bypass.
+    isSuperAdmin: !active && roleNames.includes('SUPER_ADMIN'),
     roles: roleNames,
     permissions,
     // Stamped from the membership's stored value, never from a cache — a
     // cached epoch could be behind and would mint a token that is stale the
     // moment it is issued, looping the client through refresh (ADR-005).
     permissionsEpoch: active ? active.membership.permissionsEpoch : 0,
+    ...(user.mustChangePassword ? { mustChangePassword: true } : {}),
   });
 
   const rawRefreshToken = generateOpaqueToken();
@@ -214,9 +224,22 @@ async function startSession(
  * Email now identifies the person platform-wide (ADR-001), so the old
  * "which school's row is this?" ambiguity is gone.
  */
+/**
+ * A hash nobody's password matches, verified against when the email is
+ * unknown — so "no such person" costs the same argon2 time as "wrong
+ * password", and response timing can't tell them apart. Made once, lazily.
+ */
+let dummyPasswordHash: Promise<string> | null = null;
+function unknownUserHash(): Promise<string> {
+  dummyPasswordHash ??= hashPassword(generateOpaqueToken());
+  return dummyPasswordHash;
+}
+
 async function loginUnscoped(input: LoginInput, meta: RequestMeta): Promise<LoginResponse> {
   const user = await User.findOne({ email: input.email.toLowerCase(), deletedAt: null });
-  const passwordOk = user ? await verifyPassword(user.passwordHash, input.password) : false;
+  const passwordOk = user
+    ? await verifyPassword(user.passwordHash, input.password)
+    : await verifyPassword(await unknownUserHash(), input.password).then(() => false);
 
   // Same failure for "no such person" and "wrong password", so the endpoint
   // can't be used to discover who has an account.
@@ -327,13 +350,28 @@ async function refreshUnscoped(rawRefreshToken: string, meta: RequestMeta): Prom
     if (!membership) {
       throw new AppError(403, 'NO_ACTIVE_MEMBERSHIP', 'Your access to this school has been removed');
     }
+    // A school suspended mid-session must not be refreshable, or its people
+    // would keep working until they chose to sign out. The refresh token is
+    // left intact, so reactivating the school restores the session.
+    await assertSchoolUsable(membership.schoolId);
     active = await resolveMembership(membership);
   }
 
   const tokens = await issueTokens(user, active, meta);
-  stored.revokedAt = new Date();
-  stored.replacedByTokenHash = sha256Hex(tokens.refreshToken);
-  await stored.save();
+
+  // Claim the old token atomically. Checking `revokedAt` above and saving it
+  // here as two steps let two concurrent refreshes with one token BOTH mint a
+  // session, sidestepping reuse detection. Only one request can win this
+  // update; the loser's freshly minted token is revoked straight away.
+  const claimed = await RefreshToken.findOneAndUpdate(
+    { _id: stored._id, revokedAt: null },
+    { $set: { revokedAt: new Date(), replacedByTokenHash: sha256Hex(tokens.refreshToken) } },
+    { new: true },
+  );
+  if (!claimed) {
+    await RefreshToken.updateOne({ tokenHash: sha256Hex(tokens.refreshToken) }, { $set: { revokedAt: new Date() } });
+    throw AppError.unauthorized('Refresh token already used');
+  }
 
   return tokens;
 }

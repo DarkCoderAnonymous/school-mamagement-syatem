@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,7 @@ const STATUS_VARIANT: Record<SchoolStatus, 'default' | 'secondary' | 'destructiv
 };
 
 export default function SchoolsListPage() {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
@@ -48,40 +50,55 @@ export default function SchoolsListPage() {
 
       {query.data && (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>School</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Users</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {query.data.items.length === 0 && (
+          <div className="bg-card overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={4} className="text-muted-foreground text-center">
-                    No schools yet.
-                  </TableCell>
+                  <TableHead>School</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Users</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              )}
-              {query.data.items.map((school) => (
-                <TableRow key={school._id}>
-                  <TableCell>
-                    <Link href={`/admin/schools/${school._id}`} className="font-medium hover:underline">
-                      {school.name}
-                    </Link>
-                    <div className="text-muted-foreground text-xs">{school.slug}</div>
-                  </TableCell>
-                  <TableCell>{school.contactEmail}</TableCell>
-                  <TableCell>{school.userCount ?? 0}</TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANT[school.status]}>{school.status}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody className="rows-stagger">
+                {query.data.items.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-muted-foreground text-center">
+                      No schools yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {query.data.items.map((school) => (
+                  <TableRow
+                    key={school._id}
+                    className="focus-visible:outline-ring cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2"
+                    tabIndex={0}
+                    // The whole row opens it, from the keyboard too — not just the name.
+                    onClick={() => router.push(`/admin/schools/${school._id}`)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        router.push(`/admin/schools/${school._id}`);
+                      }
+                    }}
+                  >
+                    <TableCell>
+                      <Link href={`/admin/schools/${school._id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
+                        {school.name}
+                      </Link>
+                      <div className="text-muted-foreground text-xs">{school.slug}</div>
+                    </TableCell>
+                    <TableCell>{school.contactEmail}</TableCell>
+                    <TableCell>{school.userCount ?? 0}</TableCell>
+                    <TableCell>
+                      <Badge variant={STATUS_VARIANT[school.status]}>{school.status}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
 
           <div className="flex items-center justify-between">
             <p className="text-muted-foreground text-sm">

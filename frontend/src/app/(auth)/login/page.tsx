@@ -6,11 +6,14 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { Role } from '@sms/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Field } from '@/components/form/field';
+import { PasswordInput } from '@/components/form/password-input';
+import { AuthHeading } from '@/components/public/auth-shell';
 import { login } from '@/lib/api/auth';
 import { ApiRequestError } from '@/lib/api/http';
 import { useAuthStore } from '@/lib/auth-store';
@@ -76,48 +79,76 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1 text-center">
-        <h1 className="text-2xl font-semibold">Sign in</h1>
-        <p className="text-muted-foreground text-sm">Use your school-issued credentials</p>
-      </div>
+    <div className="space-y-8">
+      <AuthHeading
+        title="Welcome back"
+        description="Sign in with the email your school registered for you."
+      />
 
       {serverError && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="animate-shake">
+          <AlertCircle aria-hidden="true" />
           <AlertTitle>Couldn&apos;t sign in</AlertTitle>
           <AlertDescription>{serverError}</AlertDescription>
         </Alert>
       )}
 
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" autoComplete="email" {...register('email')} />
-          {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
-        </div>
+      <form onSubmit={onSubmit} className="space-y-5" noValidate>
+        <Field label="Email" htmlFor="email" error={errors.email?.message}>
+          {({ id, describedBy }) => (
+            <Input
+              id={id}
+              type="email"
+              autoComplete="email"
+              placeholder="you@school.edu"
+              aria-invalid={!!errors.email}
+              aria-describedby={describedBy}
+              className="h-10"
+              {...register('email')}
+            />
+          )}
+        </Field>
 
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Link href="/forgot-password" className="text-muted-foreground text-xs underline underline-offset-4">
+        <Field
+          label="Password"
+          htmlFor="password"
+          error={errors.password?.message}
+          labelAction={
+            <Link
+              href="/forgot-password"
+              className="text-primary hover:text-primary/80 rounded-sm text-xs font-medium underline-offset-4 hover:underline"
+            >
               Forgot password?
             </Link>
-          </div>
-          <Input id="password" type="password" autoComplete="current-password" {...register('password')} />
-          {errors.password && <p className="text-destructive text-xs">{errors.password.message}</p>}
-        </div>
+          }
+        >
+          {({ id, describedBy }) => (
+            <PasswordInput
+              id={id}
+              autoComplete="current-password"
+              aria-invalid={!!errors.password}
+              aria-describedby={describedBy}
+              className="h-10"
+              {...register('password')}
+            />
+          )}
+        </Field>
 
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <Button type="submit" className="h-10 w-full" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="animate-spin" aria-hidden="true" />}
           {isSubmitting ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
 
-      <p className="text-muted-foreground text-center text-sm">
-        Registering a school?{' '}
-        <Link href="/register" className="text-foreground underline underline-offset-4">
-          Apply here
+      <div className="text-muted-foreground border-t pt-6 text-sm">
+        New to the platform?{' '}
+        <Link
+          href="/register"
+          className="text-foreground font-medium underline-offset-4 hover:underline"
+        >
+          Register your school
         </Link>
-      </p>
+      </div>
     </div>
   );
 }

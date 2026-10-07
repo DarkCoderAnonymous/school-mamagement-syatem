@@ -10,6 +10,8 @@ export interface SubmitRegistrationInput {
   city?: string;
   country?: string;
   curriculum?: string;
+  /** ISO 4217, one of SCHOOL_CURRENCIES. */
+  currency: string;
   expectedStudents?: number;
   requestedPlanId: string;
 }

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.middleware';
 import { validate } from '../../middleware/validate.middleware';
 import { loginRateLimiter } from './login-rate-limit';
+import { forgotPasswordEmailLimiter, loginEmailLimiter, refreshFailureLimiter } from '../../middleware/rateLimiter';
 import {
   changePasswordSchema,
   forgotPasswordSchema,
@@ -31,7 +32,7 @@ const router = Router();
  *     summary: Log in with email + password
  *     tags: [Auth]
  */
-router.post('/login', loginRateLimiter, validate({ body: loginSchema }), loginHandler);
+router.post('/login', loginRateLimiter, loginEmailLimiter, validate({ body: loginSchema }), loginHandler);
 
 /**
  * @openapi
@@ -79,7 +80,7 @@ router.post(
  *     summary: Rotate the refresh token and issue a new access token
  *     tags: [Auth]
  */
-router.post('/refresh', refreshHandler);
+router.post('/refresh', refreshFailureLimiter, refreshHandler);
 
 /**
  * @openapi
@@ -97,7 +98,7 @@ router.post('/logout', logoutHandler);
  *     summary: Request a password reset email
  *     tags: [Auth]
  */
-router.post('/forgot-password', validate({ body: forgotPasswordSchema }), forgotPasswordHandler);
+router.post('/forgot-password', forgotPasswordEmailLimiter, validate({ body: forgotPasswordSchema }), forgotPasswordHandler);
 
 /**
  * @openapi

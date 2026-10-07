@@ -1,6 +1,8 @@
 import type { ClientSession } from 'mongoose';
 import { redis } from '../config/redis';
 import { SchoolMembership } from '../models/SchoolMembership';
+import { School } from '../models/School';
+import { Subscription } from '../models/Subscription';
 import { User } from '../models/User';
 import { RefreshToken } from '../models/RefreshToken';
 import { AppError } from '../utils/AppError';
@@ -21,7 +23,11 @@ import type { AccessTokenPayload } from '../modules/auth/auth.types';
  *   sessionsValidFrom — per user, set on disable/password change. Tokens
  *                       issued earlier are dead; refresh cannot revive them.
  *
- * Neither may put the database on the per-request path, so both are read
+ * A third signal is the school itself: a SUPER_ADMIN suspending a school (or
+ * its subscription lapsing) must end its members' sessions on their next
+ * request, not merely block their next login.
+ *
+ * None may put the database on the per-request path, so all are read
  * through Redis with a short in-process cache in front. Redis being
  * unavailable must NOT fail open — "revoke access now" cannot be silently
  * conditional on infrastructure health — so the fallback is a direct read.
@@ -83,6 +89,29 @@ async function readThrough(key: string, loadFromDb: () => Promise<number>): Prom
 
 const epochKey = (membershipId: string) => `auth:epoch:${membershipId}`;
 const sessionsKey = (userId: string) => `auth:svf:${userId}`;
+const schoolKey = (schoolId: string) => `auth:school:${schoolId}`;
+
+/** Why a school can't be used right now. */
+export type SchoolBlock = 'SCHOOL_SUSPENDED' | 'SUBSCRIPTION_INACTIVE';
+export const SCHOOL_BLOCK_MESSAGE: Record<SchoolBlock, string> = {
+  SCHOOL_SUSPENDED: "This school's account has been suspended",
+  SUBSCRIPTION_INACTIVE: "This school's subscription is not active",
+};
+/** Cached as a number like the other signals: 0 = usable. */
+const BLOCK_CODES: (SchoolBlock | null)[] = [null, 'SCHOOL_SUSPENDED', 'SUBSCRIPTION_INACTIVE'];
+
+/**
+ * The one rule for whether a school may be used — login, refresh and every
+ * request all ask this, so they can never disagree. School and Subscription
+ * are platform collections, so this needs no tenant context.
+ */
+export async function schoolBlockFromDb(schoolId: string): Promise<SchoolBlock | null> {
+  const school = await School.findById(schoolId).select('status').lean();
+  if (school && school.status === 'SUSPENDED') return 'SCHOOL_SUSPENDED';
+  const subscription = await Subscription.findOne({ schoolId }).sort({ createdAt: -1 }).select('status').lean();
+  if (subscription && ['SUSPENDED', 'CANCELLED'].includes(subscription.status ?? '')) return 'SUBSCRIPTION_INACTIVE';
+  return null;
+}
 
 async function loadEpochFromDb(membershipId: string): Promise<number> {
   // Membership is tenant-scoped, and this runs before the tenant context is
@@ -119,9 +148,18 @@ async function loadSessionsValidFromDb(userId: string): Promise<number> {
  */
 export async function assertTokenFresh(payload: AccessTokenPayload): Promise<void> {
   const issuedAtMs = (payload.iat ?? 0) * 1000;
-  const validFrom = await readThrough(sessionsKey(payload.sub), () =>
-    loadSessionsValidFromDb(payload.sub),
-  );
+  // Read together, judged in order below: with Redis down each miss waits on
+  // its timeout, so reading one after another would add those waits up.
+  const [validFrom, current, blockCode] = await Promise.all([
+    readThrough(sessionsKey(payload.sub), () => loadSessionsValidFromDb(payload.sub)),
+    // A platform SUPER_ADMIN acts through no membership, so there is no epoch
+    // to compare and no school to be suspended from — `sessionsValidFrom` is
+    // their revocation path.
+    payload.membershipId ? readThrough(epochKey(payload.membershipId), () => loadEpochFromDb(payload.membershipId!)) : null,
+    payload.membershipId && payload.schoolId
+      ? readThrough(schoolKey(payload.schoolId), async () => BLOCK_CODES.indexOf(await schoolBlockFromDb(payload.schoolId!)))
+      : 0,
+  ]);
 
   // Tokens issued in the same second as the revocation are treated as revoked:
   // `iat` has one-second resolution, so `>` would let a token minted moments
@@ -130,17 +168,26 @@ export async function assertTokenFresh(payload: AccessTokenPayload): Promise<voi
     throw new AppError(401, 'SESSION_REVOKED', 'This session has been ended. Sign in again.');
   }
 
-  // A platform SUPER_ADMIN acts through no membership, so there is no epoch
-  // to compare — `sessionsValidFrom` is their revocation path.
-  if (!payload.membershipId) return;
-
-  const current = await readThrough(epochKey(payload.membershipId), () =>
-    loadEpochFromDb(payload.membershipId!),
-  );
-
-  if (current !== payload.permissionsEpoch) {
+  if (current !== null && current !== payload.permissionsEpoch) {
     throw new AppError(401, 'TOKEN_STALE', 'Your permissions changed. Refreshing your session.');
   }
+
+  // 401, not 403: the session itself is no longer valid. The client's normal
+  // 401 path then tries a refresh, which refuses too (403, the same code), and
+  // the client signs the person out — no client change needed.
+  const block = BLOCK_CODES[blockCode] ?? null;
+  if (block) throw new AppError(401, block, SCHOOL_BLOCK_MESSAGE[block]);
+}
+
+/**
+ * Called whenever a school's usability changes — suspended, reactivated, or
+ * its subscription moved — so the new state reaches every request at once
+ * (other processes within their 5-second in-process cache).
+ */
+export function invalidateSchoolAccess(schoolId: string): void {
+  const key = schoolKey(schoolId);
+  processCache.delete(key);
+  void redis.del(key).catch(() => undefined);
 }
 
 /**

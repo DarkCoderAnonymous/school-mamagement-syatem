@@ -17,6 +17,7 @@ export function Field({
   error,
   help,
   required,
+  labelAction,
   children,
   className,
 }: {
@@ -25,6 +26,8 @@ export function Field({
   error?: string;
   help?: string;
   required?: boolean;
+  /** Sits at the end of the label row, e.g. a "Forgot password?" link. */
+  labelAction?: ReactNode;
   children: ReactNode | ((ids: { id: string; describedBy?: string }) => ReactNode);
   className?: string;
 }) {
@@ -36,14 +39,17 @@ export function Field({
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      <Label htmlFor={id} className="text-[0.8125rem]">
-        {label}
-        {required && (
-          <span className="text-destructive ml-0.5" aria-hidden="true">
-            *
-          </span>
-        )}
-      </Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={id} className="text-[0.8125rem]">
+          {label}
+          {required && (
+            <span className="text-destructive ml-0.5" aria-hidden="true">
+              *
+            </span>
+          )}
+        </Label>
+        {labelAction}
+      </div>
 
       {typeof children === 'function' ? children({ id, describedBy }) : children}
 

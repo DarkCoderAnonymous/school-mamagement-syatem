@@ -1,5 +1,5 @@
-import axios from 'axios';
-import type { ApiResponse } from '@sms/shared';
+import axios, { type AxiosResponse } from 'axios';
+import type { ApiResponse, Paginated } from '@sms/shared';
 import { apiClient } from '../api-client';
 
 /** Normalized error every API call can throw — screens switch on `.code` for specific UX. */
@@ -27,15 +27,18 @@ function normalizeError(err: unknown): ApiRequestError {
   return new ApiRequestError('UNKNOWN_ERROR', 'Something went wrong');
 }
 
-function unwrap<T>(data: ApiResponse<T>): T {
+function unwrap<T>(res: AxiosResponse<ApiResponse<T>>): T {
+  // 204 No Content (change-password, logout) has no envelope to unwrap.
+  if (res.status === 204) return undefined as T;
+  const data = res.data;
   if (!data.success) throw new ApiRequestError(data.error.code, data.error.message);
   return data.data;
 }
 
-export async function apiGet<T>(url: string): Promise<T> {
+export async function apiGet<T>(url: string, params?: Record<string, string | number | undefined>): Promise<T> {
   try {
-    const res = await apiClient.get<ApiResponse<T>>(url);
-    return unwrap(res.data);
+    const res = await apiClient.get<ApiResponse<T>>(url, { params });
+    return unwrap(res);
   } catch (err) {
     throw normalizeError(err);
   }
@@ -44,8 +47,39 @@ export async function apiGet<T>(url: string): Promise<T> {
 export async function apiPost<T>(url: string, body?: unknown): Promise<T> {
   try {
     const res = await apiClient.post<ApiResponse<T>>(url, body);
-    return unwrap(res.data);
+    return unwrap(res);
   } catch (err) {
     throw normalizeError(err);
   }
+}
+
+export async function apiPut<T>(url: string, body?: unknown): Promise<T> {
+  try {
+    const res = await apiClient.put<ApiResponse<T>>(url, body);
+    return unwrap(res);
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+export async function apiPatch<T>(url: string, body?: unknown): Promise<T> {
+  try {
+    const res = await apiClient.patch<ApiResponse<T>>(url, body);
+    return unwrap(res);
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+export async function apiDelete(url: string): Promise<void> {
+  try {
+    await apiClient.delete(url);
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+/** A list endpoint: `{ items, meta: { page, limit, total, totalPages } }`. */
+export function apiGetPaginated<T>(url: string, params?: Record<string, string | number | undefined>): Promise<Paginated<T>> {
+  return apiGet<Paginated<T>>(url, params);
 }

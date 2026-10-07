@@ -2,13 +2,14 @@ import { Router } from 'express';
 import { Permission } from '@sms/shared';
 import { authenticate } from '../../../middleware/auth.middleware';
 import { requirePermission } from '../../../middleware/requirePermission';
+import { requirePlatformAccount } from '../../../middleware/requirePlatformAccount';
 import { validate } from '../../../middleware/validate.middleware';
 import { listSchoolsQuerySchema, schoolIdParamsSchema, updateSchoolStatusSchema } from './admin-schools.validation';
 import { getSchoolHandler, listSchoolsHandler, updateSchoolStatusHandler } from './admin-schools.controller';
 
 const router = Router();
 
-router.use(authenticate, requirePermission(Permission.SCHOOL_READ));
+router.use(authenticate, requirePlatformAccount, requirePermission(Permission.SCHOOL_READ));
 
 /**
  * @openapi

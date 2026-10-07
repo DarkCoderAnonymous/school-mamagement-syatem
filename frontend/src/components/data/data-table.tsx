@@ -11,7 +11,7 @@ import {
   type RowSelectionState,
 } from '@tanstack/table-core';
 import { useTable } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Download } from 'lucide-react';
+import { ArrowUp, ArrowUpDown, ChevronRight, Columns3, Download, Rows3, Rows4 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,6 +20,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -27,6 +28,7 @@ import {
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { useUrlState } from '@/hooks/use-url-state';
+import { useTableDensity } from '@/hooks/use-table-density';
 import type { PaginationMeta } from './pagination';
 import { Pagination } from './pagination';
 
@@ -97,6 +99,8 @@ export function DataTable<T extends RowData>({
   const url = useUrlState();
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({});
+  const [density, setDensity] = useTableDensity();
+  const cellPad = density === 'compact' ? 'py-1.5' : 'py-2.5';
 
   const sortParam = url.get('sort');
   const sortDir: 'asc' | 'desc' = sortParam?.startsWith('-') ? 'desc' : 'asc';
@@ -169,6 +173,9 @@ export function DataTable<T extends RowData>({
       visible.map((col) => {
         const value = row.getValue(col.id);
         if (value === null || value === undefined) return '';
+        // A text cell starting with = + - @ tab or CR is run as a formula by
+        // Excel/Sheets (CSV injection); a leading ' makes it literal text.
+        if (typeof value === 'string') return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
         return typeof value === 'object' ? JSON.stringify(value) : String(value);
       }),
     );
@@ -183,7 +190,9 @@ export function DataTable<T extends RowData>({
     URL.revokeObjectURL(link.href);
   };
 
-  const columnCount = table.getVisibleLeafColumns().length;
+  // Clickable rows get a trailing chevron column (the row's "open" affordance), so spans include it.
+  const columnCount = table.getVisibleLeafColumns().length + (onRowClick ? 1 : 0);
+  const skeletonWidths = ['w-3/4', 'w-1/2', 'w-2/3', 'w-5/6', 'w-2/5'];
 
   return (
     <div className="space-y-3">
@@ -191,7 +200,10 @@ export function DataTable<T extends RowData>({
         <div className="flex flex-wrap items-center gap-2">
           {toolbar}
           {enableSelection && selectedIds.length > 0 && bulkActions && (
-            <div className="bg-accent text-accent-foreground flex items-center gap-2 rounded-md px-3 py-1.5 text-sm">
+            <div
+              role="status"
+              className="bg-primary/10 ring-primary/20 animate-in fade-in-0 slide-in-from-left-2 flex items-center gap-2 rounded-lg px-3 py-1 text-sm ring-1 ring-inset duration-200"
+            >
               <span className="font-medium tabular-nums">{selectedIds.length} selected</span>
               {bulkActions(selectedIds, clearSelection)}
               <Button variant="ghost" size="sm" onClick={clearSelection}>
@@ -202,31 +214,44 @@ export function DataTable<T extends RowData>({
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setDensity(density === 'compact' ? 'comfortable' : 'compact')}
+            aria-label={density === 'compact' ? 'Comfortable rows' : 'Compact rows'}
+            aria-pressed={density === 'compact'}
+            title={density === 'compact' ? 'Comfortable rows' : 'Compact rows'}
+          >
+            {density === 'compact' ? <Rows3 className="size-4" /> : <Rows4 className="size-4" />}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger className="border-border bg-background hover:bg-muted focus-visible:ring-ring inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors outline-none focus-visible:ring-2">
               <Columns3 className="size-4" />
               Columns
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Show columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {table
-                .getAllLeafColumns()
-                .filter((c) => c.getCanHide() && c.id !== '__select')
-                .map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    checked={column.getIsVisible()}
-                    closeOnClick={false}
-                    onCheckedChange={() => column.toggleVisibility()}
-                  >
-                    {String(column.columnDef.header ?? column.id)}
-                  </DropdownMenuCheckboxItem>
-                ))}
+              {/* Base UI throws if a GroupLabel renders outside a Group. */}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Show columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {table
+                  .getAllLeafColumns()
+                  .filter((c) => c.getCanHide() && c.id !== '__select')
+                  .map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      checked={column.getIsVisible()}
+                      closeOnClick={false}
+                      onCheckedChange={() => column.toggleVisibility()}
+                    >
+                      {String(column.columnDef.header ?? column.id)}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={!data?.length}>
+          <Button variant="outline" onClick={exportCsv} disabled={!data?.length}>
             <Download className="size-4" />
             Export
           </Button>
@@ -241,24 +266,33 @@ export function DataTable<T extends RowData>({
                 {headerGroup.headers.map((header) => {
                   const canSort = sortableColumns.includes(header.column.id);
                   const isSorted = sortKey === header.column.id;
+                  const label = String(header.column.columnDef.header ?? header.column.id);
                   return (
-                    <TableHead key={header.id} className="text-[0.8125rem] font-medium whitespace-nowrap">
+                    <TableHead
+                      key={header.id}
+                      aria-sort={isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : canSort ? 'none' : undefined}
+                      className={cn('text-[0.8125rem] font-medium whitespace-nowrap', isSorted && 'text-foreground')}
+                    >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
                           type="button"
                           onClick={() => toggleSort(header.column.id)}
-                          className="hover:text-foreground -mx-1 flex items-center gap-1 rounded px-1 transition-colors"
-                          aria-label={`Sort by ${String(header.column.columnDef.header ?? header.column.id)}`}
+                          className="group/sort hover:text-foreground focus-visible:ring-ring/50 -mx-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors outline-none hover:bg-muted focus-visible:ring-2"
+                          aria-label={
+                            isSorted
+                              ? `${label}, sorted ${sortDir === 'asc' ? 'ascending' : 'descending'}. Sort ${sortDir === 'asc' ? 'descending' : 'ascending'}`
+                              : `Sort by ${label}`
+                          }
                         >
                           <table.FlexRender header={header} />
                           {isSorted ? (
-                            sortDir === 'asc' ? (
-                              <ArrowUp className="size-3.5" />
-                            ) : (
-                              <ArrowDown className="size-3.5" />
-                            )
+                            // One arrow that turns over, so flipping the order reads as the same control changing.
+                            <ArrowUp
+                              aria-hidden="true"
+                              className={cn('text-primary size-3.5 transition-transform duration-200', sortDir === 'desc' && 'rotate-180')}
+                            />
                           ) : (
-                            <ChevronsUpDown className="size-3.5 opacity-40" />
+                            <ArrowUpDown aria-hidden="true" className="size-3.5 opacity-35 transition-opacity group-hover/sort:opacity-80" />
                           )}
                         </button>
                       ) : (
@@ -267,19 +301,24 @@ export function DataTable<T extends RowData>({
                     </TableHead>
                   );
                 })}
+                {onRowClick && (
+                  <TableHead className="w-8">
+                    <span className="sr-only">Open</span>
+                  </TableHead>
+                )}
               </TableRow>
             ))}
           </TableHeader>
 
-          <TableBody>
+          <TableBody className="rows-stagger">
             {loading &&
               // Skeletons shaped like the real rows, so the table doesn't
               // resize when data lands.
               Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={`skeleton-${i}`}>
                   {Array.from({ length: columnCount }).map((__, j) => (
-                    <TableCell key={`skeleton-${i}-${j}`}>
-                      <Skeleton className="h-4 w-full max-w-32" />
+                    <TableCell key={`skeleton-${i}-${j}`} className={cellPad}>
+                      <Skeleton className={cn('h-4 max-w-40', skeletonWidths[(i + j * 2) % skeletonWidths.length])} />
                     </TableCell>
                   ))}
                 </TableRow>
@@ -308,13 +347,37 @@ export function DataTable<T extends RowData>({
                   key={row.id}
                   data-state={row.getIsSelected() ? 'selected' : undefined}
                   onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                  className={cn(onRowClick && 'hover:bg-muted/50 cursor-pointer')}
+                  // A clickable row is reachable and openable from the keyboard too, not by pointer only.
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={
+                    onRowClick
+                      ? (e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onRowClick(row.original);
+                          }
+                        }
+                      : undefined
+                  }
+                  className={cn(
+                    onRowClick &&
+                      'group/row focus-visible:outline-ring cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2',
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-2.5">
+                    <TableCell key={cell.id} className={cellPad}>
                       <table.FlexRender cell={cell} />
                     </TableCell>
                   ))}
+                  {onRowClick && (
+                    <TableCell className={cn(cellPad, 'w-8 pr-3')}>
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="text-muted-foreground size-4 -translate-x-1 opacity-0 transition-[opacity,transform] duration-200 group-hover/row:translate-x-0 group-hover/row:opacity-100 group-focus-visible/row:translate-x-0 group-focus-visible/row:opacity-100"
+                      />
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
           </TableBody>

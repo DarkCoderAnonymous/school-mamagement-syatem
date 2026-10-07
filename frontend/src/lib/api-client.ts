@@ -19,16 +19,19 @@ const refreshClient = axios.create({ baseURL: API_BASE_URL, withCredentials: tru
 let getAccessToken: () => string | null | undefined = () => null;
 let onUnauthorized: () => void = () => undefined;
 let onTokenRefreshed: (accessToken: string) => void = () => undefined;
+let onPasswordChangeRequired: () => void = () => undefined;
 
 /** Called once by AuthProvider to wire in real token storage. */
 export function configureApiClient(options: {
   getAccessToken: () => string | null | undefined;
   onUnauthorized?: () => void;
   onTokenRefreshed?: (accessToken: string) => void;
+  onPasswordChangeRequired?: () => void;
 }): void {
   getAccessToken = options.getAccessToken;
   if (options.onUnauthorized) onUnauthorized = options.onUnauthorized;
   if (options.onTokenRefreshed) onTokenRefreshed = options.onTokenRefreshed;
+  if (options.onPasswordChangeRequired) onPasswordChangeRequired = options.onPasswordChangeRequired;
 }
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -87,6 +90,16 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
+
+    // The server refuses everything but /auth/* until a temporary password is
+    // replaced. Not a sign-out: the session stays, the user is sent to change it.
+    if (
+      error.response?.status === 403 &&
+      (error.response.data as { error?: { code?: string } } | undefined)?.error?.code === 'PASSWORD_CHANGE_REQUIRED'
+    ) {
+      onPasswordChangeRequired();
+      return Promise.reject(error);
+    }
 
     if (
       error.response?.status === 401 &&

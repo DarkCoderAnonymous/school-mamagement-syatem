@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -28,7 +29,7 @@ import { useAuthStore } from '@/lib/auth-store';
  * previous school and must be discarded; leaving them would show one school's
  * numbers under another school's name for as long as the cache lives.
  */
-export function SchoolSwitcher({ collapsed }: { collapsed?: boolean }) {
+export function SchoolSwitcher({ collapsed, caption }: { collapsed?: boolean; caption?: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
@@ -58,24 +59,40 @@ export function SchoolSwitcher({ collapsed }: { collapsed?: boolean }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="hover:bg-muted focus-visible:ring-ring flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors outline-none focus-visible:ring-2"
+        className="hover:bg-muted focus-visible:ring-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors outline-none focus-visible:ring-2"
         aria-label="Switch school"
         disabled={switching}
       >
-        <Avatar className="size-6 shrink-0" style={{ backgroundColor: user?.schoolPrimaryColor ?? undefined }}>
-          {user?.schoolLogoUrl && <AvatarImage src={user.schoolLogoUrl} alt="" />}
-          <AvatarFallback className="text-[0.625rem]">{user?.schoolName?.[0] ?? 'S'}</AvatarFallback>
+        <Avatar
+          className="size-8 shrink-0 rounded-lg after:rounded-lg"
+          style={user?.schoolPrimaryColor ? { backgroundColor: user.schoolPrimaryColor } : undefined}
+        >
+          {user?.schoolLogoUrl && <AvatarImage src={user.schoolLogoUrl} alt="" className="rounded-lg" />}
+          <AvatarFallback
+            className={
+              user?.schoolPrimaryColor
+                ? 'rounded-lg bg-transparent text-sm font-semibold text-white'
+                : 'bg-primary text-primary-foreground rounded-lg text-sm font-semibold'
+            }
+          >
+            {user?.schoolName?.[0] ?? 'S'}
+          </AvatarFallback>
         </Avatar>
         {!collapsed && (
           <>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{user?.schoolName}</span>
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate text-sm font-semibold">{user?.schoolName}</span>
+              {caption && <span className="text-muted-foreground block truncate text-xs">{caption}</span>}
+            </span>
             <ChevronsUpDown className="text-muted-foreground size-3.5 shrink-0" />
           </>
         )}
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel>Your schools</DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Your schools</DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {memberships.map((membership) => {
           const active = membership.schoolId === user?.schoolId;

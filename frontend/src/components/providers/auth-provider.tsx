@@ -9,6 +9,12 @@ configureApiClient({
   getAccessToken: () => useAuthStore.getState().accessToken,
   onUnauthorized: () => useAuthStore.getState().clear(),
   onTokenRefreshed: (accessToken) => useAuthStore.getState().setAccessToken(accessToken),
+  // The server says this session still holds a temporary password. Record it on
+  // the user (session kept) and RequireAuth redirects to /change-password once.
+  onPasswordChangeRequired: () => {
+    const { user } = useAuthStore.getState();
+    if (user && !user.mustChangePassword) useAuthStore.setState({ user: { ...user, mustChangePassword: true } });
+  },
 });
 
 /**

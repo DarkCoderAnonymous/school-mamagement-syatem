@@ -1,4 +1,5 @@
 import { Schema, model, Types } from 'mongoose';
+import { DEFAULT_SCHOOL_CURRENCY, SCHOOL_CURRENCY_CODES } from '@sms/shared';
 import { createPlatformSchema } from './base';
 
 /**
@@ -16,6 +17,8 @@ const schoolRegistrationSchema = createPlatformSchema({
   city: { type: String, trim: true },
   country: { type: String, trim: true },
   curriculum: { type: String, trim: true },
+  /** The currency the school will run in (ISO 4217) — copied onto the School at approval. */
+  currency: { type: String, enum: SCHOOL_CURRENCY_CODES, default: DEFAULT_SCHOOL_CURRENCY },
   expectedStudents: { type: Number, min: 0 },
   requestedPlanId: { type: Schema.Types.ObjectId, ref: 'Plan', required: true },
   documents: {
@@ -59,6 +62,7 @@ export interface SchoolRegistrationDoc {
   city?: string;
   country?: string;
   curriculum?: string;
+  currency?: string;
   expectedStudents?: number;
   requestedPlanId: Types.ObjectId;
   documents: { name: string; url: string; uploadedAt: Date }[];

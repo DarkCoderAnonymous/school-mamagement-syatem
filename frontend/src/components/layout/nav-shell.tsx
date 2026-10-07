@@ -11,6 +11,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -73,10 +74,12 @@ export function NavShell({
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>
-              {user?.firstName} {user?.lastName}
-              <div className="text-muted-foreground text-xs font-normal">{user?.email}</div>
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>
+                {user?.firstName} {user?.lastName}
+                <div className="text-muted-foreground text-xs font-normal">{user?.email}</div>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => router.push('/change-password')}>Change password</DropdownMenuItem>
             <DropdownMenuItem onClick={handleLogout}>Log out</DropdownMenuItem>

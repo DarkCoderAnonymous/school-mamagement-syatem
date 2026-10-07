@@ -337,7 +337,13 @@ export function tenantPlugin(schema: Schema): void {
         if (value === null || value === undefined) continue;
         // Scoped by the query middleware above, so "not found" means "not in
         // this school" just as much as "doesn't exist".
-        const exists = await refModel.exists({ _id: value });
+        //
+        // Read inside the document's own transaction, if it has one. A row
+        // created earlier in the same transaction (the Employee a new Teacher
+        // points at, say) is invisible to a read outside it, so without the
+        // session every multi-document create would be refused as a
+        // cross-tenant reference. The lookup is still scoped exactly as before.
+        const exists = await refModel.exists({ _id: value }).session(this.$session() ?? null);
         if (!exists) {
           throw new Error(
             `${path} references a ${ref} that does not belong to this school. ` +
@@ -405,6 +411,26 @@ const TENANT_COLLECTIONS = new Set([
   'employees',
   'notifications',
   'fileuploads',
+  'counters',
+  'inventorycategories',
+  'inventoryitems',
+  'inventorymovements',
+  'feeheads',
+  'feestructures',
+  'feeconcessions',
+  'feeinvoices',
+  'feepayments',
+  'salarycomponents',
+  'salarystructures',
+  'salaryadvances',
+  'payrollruns',
+  'payslips',
+  'financecategories',
+  'ledgerentries',
+  'exams',
+  'exampapers',
+  'marks',
+  'examresults',
 ]);
 
 export function isTenantCollection(collectionName: string): boolean {

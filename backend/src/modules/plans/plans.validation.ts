@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import { listQueryBase } from '../../utils/query';
+
+/** GET /admin/plans — the shared list params (limit and search capped). */
+export const listPlansQuerySchema = z.object(listQueryBase);
 
 const limitsSchema = z.object({
   students: z.number().int().min(0),

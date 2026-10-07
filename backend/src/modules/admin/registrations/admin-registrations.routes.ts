@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { Permission } from '@sms/shared';
 import { authenticate } from '../../../middleware/auth.middleware';
 import { requirePermission } from '../../../middleware/requirePermission';
+import { requirePlatformAccount } from '../../../middleware/requirePlatformAccount';
 import { validate } from '../../../middleware/validate.middleware';
 import {
   listRegistrationsQuerySchema,
@@ -19,7 +20,7 @@ import {
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, requirePlatformAccount);
 
 /**
  * @openapi

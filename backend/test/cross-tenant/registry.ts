@@ -6,6 +6,25 @@ import { Counter } from '../../src/models/Counter';
 import { Employee } from '../../src/models/Employee';
 import { FileUpload } from '../../src/models/FileUpload';
 import { Guardian } from '../../src/models/Guardian';
+import { FeeHead } from '../../src/models/FeeHead';
+import { FeeStructure } from '../../src/models/FeeStructure';
+import { FeeConcession } from '../../src/models/FeeConcession';
+import { FeeInvoice } from '../../src/models/FeeInvoice';
+import { FeePayment } from '../../src/models/FeePayment';
+import { SalaryComponent } from '../../src/models/SalaryComponent';
+import { SalaryStructure } from '../../src/models/SalaryStructure';
+import { SalaryAdvance } from '../../src/models/SalaryAdvance';
+import { PayrollRun } from '../../src/models/PayrollRun';
+import { Payslip } from '../../src/models/Payslip';
+import { FinanceCategory } from '../../src/models/FinanceCategory';
+import { LedgerEntry } from '../../src/models/LedgerEntry';
+import { Exam } from '../../src/models/Exam';
+import { ExamPaper } from '../../src/models/ExamPaper';
+import { Mark } from '../../src/models/Mark';
+import { ExamResult } from '../../src/models/ExamResult';
+import { InventoryCategory } from '../../src/models/InventoryCategory';
+import { InventoryItem } from '../../src/models/InventoryItem';
+import { InventoryMovement } from '../../src/models/InventoryMovement';
 import { Notification } from '../../src/models/Notification';
 import { RefreshToken } from '../../src/models/RefreshToken';
 import { SchoolMembership } from '../../src/models/SchoolMembership';
@@ -13,6 +32,10 @@ import { Section } from '../../src/models/Section';
 import { Student } from '../../src/models/Student';
 import { Subject } from '../../src/models/Subject';
 import { Teacher } from '../../src/models/Teacher';
+import { TeachingAssignment } from '../../src/models/TeachingAssignment';
+import { Attendance } from '../../src/models/Attendance';
+import { Holiday } from '../../src/models/Holiday';
+import { StaffAttendance } from '../../src/models/StaffAttendance';
 import { User } from '../../src/models/User';
 import { TenantContext } from '../../src/tenant/context';
 import type { SchoolFixture } from './fixture';
@@ -37,10 +60,69 @@ async function freshEmployeeId(school: SchoolFixture, seed: string): Promise<str
     schoolId: school.schoolId,
     userId: school.adminUserId,
     employeeNumber: `EMP-${school.label}-${seed}-${Date.now()}`,
+    firstName: 'Probe',
+    lastName: `Employee ${school.label}`,
     designation: 'Probe',
     joiningDate: new Date('2025-01-01'),
   });
   return String(employee._id);
+}
+
+/** Letters/digits only — fee and salary codes and receipt numbers reject punctuation. */
+const token = (label: string, seed: string) => `${label}${seed}`.replace(/[^A-Za-z0-9]/g, '').slice(-20);
+
+/**
+ * A "YYYY-MM" that varies with the seed: payroll runs are unique per month,
+ * so every probe needs its own. Years 2040+ keep clear of real data and of the
+ * endpoint probe's months (2039).
+ */
+function seedMonth(label: string, seed: string, baseYear = 2040): string {
+  let h = 7;
+  for (const ch of `${label}${seed}`) h = (h * 31 + ch.charCodeAt(0)) % 1_000_003;
+  const year = baseYear + (h % 50);
+  const month = (Math.floor(h / 50) % 12) + 1;
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+/**
+ * Papers are unique per (exam, class, subject), marks per (paper, student)
+ * and results per (exam, student): a seeded probe brings its own subject,
+ * paper or exam so it never collides with the fixture's rows on an index.
+ */
+async function freshSubjectId(school: SchoolFixture, seed: string): Promise<string> {
+  const subject = await Subject.create({ schoolId: school.schoolId, name: `Probe subject ${school.label}${seed}`, code: `PS${token(school.label, seed)}${Date.now() % 100000}` });
+  return String(subject._id);
+}
+async function freshPaperId(school: SchoolFixture, seed: string): Promise<string> {
+  const paper = await ExamPaper.create({
+    schoolId: school.schoolId,
+    examId: school.ids.exam,
+    classId: school.ids.class,
+    subjectId: await freshSubjectId(school, seed),
+    maxMarks: 100,
+    passMarks: 33,
+  });
+  return String(paper._id);
+}
+async function freshExamId(school: SchoolFixture, seed: string): Promise<string> {
+  const exam = await Exam.create({
+    schoolId: school.schoolId,
+    name: `Probe exam ${school.label}${seed}-${Date.now()}`,
+    academicSessionId: school.ids.academicSession,
+    startDate: new Date('2025-05-01'),
+    endDate: new Date('2025-05-10'),
+  });
+  return String(exam._id);
+}
+
+/**
+ * Attendance is unique per (student, day): a seeded probe needs its own day.
+ * Years 2031+ keep clear of real registers.
+ */
+function seedDay(seed: string): Date {
+  let h = 11;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) % 1_000_003;
+  return new Date(Date.UTC(2031, 0, 1) + (h % 3650) * 86_400_000);
 }
 
 /**
@@ -151,6 +233,8 @@ export const TENANT_MODELS: TenantModelEntry[] = [
     build: (s, seed) => ({
       userId: s.adminUserId,
       employeeNumber: `EMP-${s.label}-${seed || '1'}`,
+      firstName: 'Terry',
+      lastName: `Teacher ${s.label}${seed}`,
       designation: 'Teacher',
       joiningDate: new Date('2025-01-01'),
     }),
@@ -190,6 +274,329 @@ export const TENANT_MODELS: TenantModelEntry[] = [
       { field: 'academicSessionId', refEntry: 'academicSession' },
     ],
     populate: { path: 'classId', refEntry: 'class' },
+  },
+  {
+    name: 'teachingAssignment',
+    model: TeachingAssignment,
+    // Unique per (teacher, section, subject), so every build brings its own
+    // subject — including the fixture's, leaving the fixture subject free for
+    // the endpoint probe's POST.
+    build: async (s, seed) => ({
+      teacherId: s.ids.teacher,
+      sectionId: s.ids.section,
+      classId: s.ids.class,
+      academicSessionId: s.ids.academicSession,
+      subjectId: await freshSubjectId(s, seed || 'assignment'),
+    }),
+    mutation: { subjectId: '0000000000000000000000a1' },
+    foreignKeys: [
+      { field: 'teacherId', refEntry: 'teacher' },
+      { field: 'sectionId', refEntry: 'section' },
+      { field: 'subjectId', refEntry: 'subject' },
+    ],
+    populate: { path: 'teacherId', refEntry: 'teacher' },
+  },
+  {
+    name: 'attendance',
+    model: Attendance,
+    build: (s, seed) => ({
+      studentId: s.ids.student,
+      sectionId: s.ids.section,
+      classId: s.ids.class,
+      academicSessionId: s.ids.academicSession,
+      date: seedDay(seed),
+      status: 'PRESENT',
+      markedByUserId: s.adminUserId,
+    }),
+    mutation: { remark: 'HIJACKED' },
+    foreignKeys: [
+      { field: 'studentId', refEntry: 'student' },
+      { field: 'sectionId', refEntry: 'section' },
+    ],
+    populate: { path: 'studentId', refEntry: 'student' },
+  },
+  {
+    name: 'staffAttendance',
+    model: StaffAttendance,
+    build: (s, seed) => ({ employeeId: s.ids.employee, date: seedDay(seed), status: 'PRESENT', markedByUserId: s.adminUserId }),
+    mutation: { remark: 'HIJACKED' },
+    foreignKeys: [{ field: 'employeeId', refEntry: 'employee' }],
+    populate: { path: 'employeeId', refEntry: 'employee' },
+  },
+  {
+    name: 'holiday',
+    model: Holiday,
+    build: (s, seed) => ({ name: `Founders Day ${s.label}${seed}`, startDate: seedDay(seed), endDate: seedDay(seed) }),
+    mutation: { name: 'HIJACKED' },
+  },
+  {
+    name: 'inventoryCategory',
+    model: InventoryCategory,
+    build: (s, seed) => ({ name: `Science lab ${s.label}${seed}` }),
+    mutation: { name: 'HIJACKED' },
+  },
+  {
+    name: 'inventoryItem',
+    model: InventoryItem,
+    build: (s, seed) => ({
+      name: `Microscope ${s.label}${seed}`,
+      sku: `ITM-${s.label}${seed || '1'}`.replace(/[^A-Za-z0-9-]/g, ''),
+      categoryId: s.ids.inventoryCategory,
+      quantityOnHand: 5,
+      reorderLevel: 2,
+    }),
+    mutation: { name: 'HIJACKED' },
+    foreignKeys: [{ field: 'categoryId', refEntry: 'inventoryCategory' }],
+    populate: { path: 'categoryId', refEntry: 'inventoryCategory' },
+  },
+  {
+    name: 'inventoryMovement',
+    model: InventoryMovement,
+    build: (s, seed) => ({
+      itemId: s.ids.inventoryItem,
+      type: 'RECEIVE',
+      quantityChange: 5,
+      balanceAfter: 5,
+      note: `Opening stock ${s.label}${seed}`,
+      recordedByUserId: s.adminUserId,
+    }),
+    mutation: { note: 'HIJACKED' },
+    foreignKeys: [{ field: 'itemId', refEntry: 'inventoryItem' }],
+    populate: { path: 'itemId', refEntry: 'inventoryItem' },
+  },
+  {
+    name: 'feeHead',
+    model: FeeHead,
+    build: (s, seed) => ({ name: `Tuition ${s.label}${seed}`, code: `TU${token(s.label, seed)}` }),
+    mutation: { name: 'HIJACKED' },
+  },
+  {
+    name: 'feeStructure',
+    model: FeeStructure,
+    build: (s, seed) => ({
+      name: `Structure ${s.label}${seed}`,
+      academicSessionId: s.ids.academicSession,
+      classId: s.ids.class,
+      items: [{ feeHeadId: s.ids.feeHead, amountMinor: 5000 }],
+    }),
+    mutation: { name: 'HIJACKED' },
+    foreignKeys: [
+      { field: 'academicSessionId', refEntry: 'academicSession' },
+      { field: 'classId', refEntry: 'class' },
+    ],
+    populate: { path: 'classId', refEntry: 'class' },
+  },
+  {
+    name: 'feeConcession',
+    model: FeeConcession,
+    build: (s, seed) => ({ studentId: s.ids.student, name: `Sibling ${s.label}${seed}`, type: 'PERCENT', value: 10 }),
+    mutation: { name: 'HIJACKED' },
+    foreignKeys: [{ field: 'studentId', refEntry: 'student' }],
+    populate: { path: 'studentId', refEntry: 'student' },
+  },
+  {
+    name: 'feeInvoice',
+    model: FeeInvoice,
+    // Due long ago, so the fixture invoice is overdue and the defaulters list has a row.
+    build: (s, seed) => ({
+      invoiceNumber: `INV-${token(s.label, seed) || s.label}`,
+      studentId: s.ids.student,
+      classId: s.ids.class,
+      periodKey: `P${token(s.label, seed) || s.label}`,
+      periodLabel: `Period ${s.label}${seed}`,
+      issueDate: new Date('2025-01-01'),
+      dueDate: new Date('2025-01-10'),
+      lines: [{ name: 'Tuition', amountMinor: 10000 }],
+      subtotalMinor: 10000,
+      totalMinor: 10000,
+    }),
+    mutation: { periodLabel: 'HIJACKED' },
+    foreignKeys: [
+      { field: 'studentId', refEntry: 'student' },
+      { field: 'classId', refEntry: 'class' },
+    ],
+    populate: { path: 'studentId', refEntry: 'student' },
+  },
+  {
+    name: 'feePayment',
+    model: FeePayment,
+    build: (s, seed) => ({
+      receiptNumber: `RCPT-${token(s.label, seed) || s.label}`,
+      studentId: s.ids.student,
+      allocations: [{ invoiceId: s.ids.feeInvoice, amountMinor: 1000 }],
+      amountMinor: 1000,
+      method: 'CASH',
+      paidAt: new Date('2025-02-01'),
+      receivedByUserId: s.adminUserId,
+    }),
+    mutation: { reference: 'HIJACKED' },
+    foreignKeys: [{ field: 'studentId', refEntry: 'student' }],
+    populate: { path: 'studentId', refEntry: 'student' },
+  },
+  {
+    name: 'salaryComponent',
+    model: SalaryComponent,
+    build: (s, seed) => ({
+      name: `House rent ${s.label}${seed}`,
+      code: `HR${token(s.label, seed)}`,
+      type: 'EARNING',
+      calculation: 'PERCENT_OF_BASIC',
+      defaultValue: 40,
+    }),
+    mutation: { name: 'HIJACKED' },
+  },
+  {
+    name: 'salaryStructure',
+    model: SalaryStructure,
+    // One structure per employee, so a seeded probe brings its own employee.
+    build: async (s, seed) => ({
+      employeeId: seed ? await freshEmployeeId(s, seed) : s.ids.employee,
+      basicMinor: 50000,
+      components: [{ componentId: s.ids.salaryComponent, value: 40 }],
+      effectiveFrom: new Date('2025-01-01'),
+    }),
+    mutation: { bankName: 'HIJACKED' },
+    foreignKeys: [{ field: 'employeeId', refEntry: 'employee' }],
+    populate: { path: 'employeeId', refEntry: 'employee' },
+  },
+  {
+    name: 'salaryAdvance',
+    model: SalaryAdvance,
+    build: (s, seed) => ({
+      employeeId: s.ids.employee,
+      amountMinor: 10000,
+      installmentMinor: 2000,
+      reason: `Advance ${s.label}${seed}`,
+      issuedAt: new Date('2025-01-01'),
+    }),
+    mutation: { reason: 'HIJACKED' },
+    foreignKeys: [{ field: 'employeeId', refEntry: 'employee' }],
+    populate: { path: 'employeeId', refEntry: 'employee' },
+  },
+  {
+    name: 'payrollRun',
+    model: PayrollRun,
+    build: (s, seed) => ({ month: seedMonth(s.label, seed), notes: `Run ${s.label}${seed}` }),
+    mutation: { notes: 'HIJACKED' },
+  },
+  {
+    name: 'payslip',
+    model: Payslip,
+    // Unique per (run, employee): a seeded probe brings its own employee.
+    build: async (s, seed) => ({
+      payrollRunId: s.ids.payrollRun,
+      employeeId: seed ? await freshEmployeeId(s, seed) : s.ids.employee,
+      userId: s.adminUserId,
+      month: seedMonth(s.label, ''),
+      employee: { name: `Payee ${s.label}${seed}`, employeeNumber: `EMP-${s.label}` },
+      daysInMonth: 31,
+      basicMinor: 50000,
+      grossMinor: 70000,
+      totalDeductionsMinor: 5000,
+      netMinor: 65000,
+    }),
+    mutation: { unpaidLeaveDays: 9 },
+    foreignKeys: [
+      { field: 'payrollRunId', refEntry: 'payrollRun' },
+      { field: 'employeeId', refEntry: 'employee' },
+    ],
+    populate: { path: 'payrollRunId', refEntry: 'payrollRun' },
+  },
+  {
+    name: 'financeCategory',
+    model: FinanceCategory,
+    build: (s, seed) => ({ name: `Utilities ${s.label}${seed}`, type: 'EXPENSE' }),
+    mutation: { name: 'HIJACKED' },
+  },
+  {
+    name: 'ledgerEntry',
+    model: LedgerEntry,
+    build: (s, seed) => ({
+      type: 'EXPENSE',
+      categoryId: s.ids.financeCategory,
+      amountMinor: 5000,
+      date: new Date('2025-03-01'),
+      description: `Electricity ${s.label}${seed}`,
+      recordedByUserId: s.adminUserId,
+    }),
+    mutation: { description: 'HIJACKED' },
+    foreignKeys: [{ field: 'categoryId', refEntry: 'financeCategory' }],
+    populate: { path: 'categoryId', refEntry: 'financeCategory' },
+  },
+  {
+    name: 'exam',
+    model: Exam,
+    build: (s, seed) => ({
+      name: `Mid-term ${s.label}${seed}`,
+      type: 'MIDTERM',
+      academicSessionId: s.ids.academicSession,
+      startDate: new Date('2025-05-01'),
+      endDate: new Date('2025-05-10'),
+    }),
+    mutation: { description: 'HIJACKED' },
+    foreignKeys: [{ field: 'academicSessionId', refEntry: 'academicSession' }],
+    populate: { path: 'academicSessionId', refEntry: 'academicSession' },
+  },
+  {
+    name: 'examPaper',
+    model: ExamPaper,
+    build: async (s, seed) => ({
+      examId: s.ids.exam,
+      classId: s.ids.class,
+      subjectId: seed ? await freshSubjectId(s, seed) : s.ids.subject,
+      maxMarks: 100,
+      passMarks: 33,
+    }),
+    mutation: { returnReason: 'HIJACKED' },
+    foreignKeys: [
+      { field: 'examId', refEntry: 'exam' },
+      { field: 'classId', refEntry: 'class' },
+      { field: 'subjectId', refEntry: 'subject' },
+    ],
+    populate: { path: 'subjectId', refEntry: 'subject' },
+  },
+  {
+    name: 'mark',
+    model: Mark,
+    build: async (s, seed) => ({
+      examPaperId: seed ? await freshPaperId(s, seed) : s.ids.examPaper,
+      examId: s.ids.exam,
+      studentId: s.ids.student,
+      marksObtained: 72,
+    }),
+    mutation: { remarks: 'HIJACKED' },
+    foreignKeys: [
+      { field: 'examPaperId', refEntry: 'examPaper' },
+      { field: 'studentId', refEntry: 'student' },
+    ],
+    populate: { path: 'studentId', refEntry: 'student' },
+  },
+  {
+    name: 'examResult',
+    model: ExamResult,
+    build: async (s, seed) => ({
+      examId: seed ? await freshExamId(s, seed) : s.ids.exam,
+      studentId: s.ids.student,
+      classId: s.ids.class,
+      student: { name: `Sam Student ${s.label}`, admissionNumber: `ADM-${s.label}` },
+      examName: `Mid-term ${s.label}${seed}`,
+      className: `Grade ${s.label}`,
+      subjects: [{ name: 'Mathematics', maxMarks: 100, passMarks: 33, marksObtained: 72, percentage: 72, grade: 'B', passed: true }],
+      totalObtained: 72,
+      totalMax: 100,
+      percentage: 72,
+      grade: 'B',
+      result: 'PASS',
+      classRank: 1,
+      publishedAt: new Date('2025-05-20'),
+    }),
+    mutation: { remark: 'HIJACKED' },
+    foreignKeys: [
+      { field: 'examId', refEntry: 'exam' },
+      { field: 'studentId', refEntry: 'student' },
+      { field: 'classId', refEntry: 'class' },
+    ],
+    populate: { path: 'studentId', refEntry: 'student' },
   },
   {
     name: 'notification',
@@ -285,5 +692,287 @@ export const TENANT_ENDPOINTS: EndpointEntry[] = [
       endDate: '2031-03-31T00:00:00.000Z',
     }),
     updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'classes',
+    basePath: '/api/v1/classes',
+    idFrom: 'class',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({ name: `Endpoint Grade ${s.label} ${seed}`, academicSessionId: s.ids.academicSession }),
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'sections',
+    basePath: '/api/v1/sections',
+    idFrom: 'section',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({ classId: s.ids.class, name: `E${seed}`.slice(0, 30) }),
+    updateBody: { name: 'HIJACKED' },
+  },
+  {
+    name: 'subjects',
+    basePath: '/api/v1/subjects',
+    idFrom: 'subject',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({
+      name: `Endpoint Physics ${s.label}${seed}`,
+      code: `P${s.label}${seed}`.replace(/[^A-Za-z0-9-]/g, '').slice(0, 12),
+    }),
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'teachers',
+    basePath: '/api/v1/teachers',
+    idFrom: 'teacher',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({
+      firstName: 'Endpoint',
+      lastName: `Teacher ${s.label}`,
+      email: `teacher-${s.label}${seed}-${Date.now()}@xtenant.test`.toLowerCase(),
+      subjectIds: [s.ids.subject],
+    }),
+    updateBody: { qualification: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'teaching-assignments',
+    basePath: '/api/v1/teaching-assignments',
+    idFrom: 'teachingAssignment',
+    supports: { list: true, create: true, remove: true },
+    createBody: (s) => ({ teacherId: s.ids.teacher, sectionId: s.ids.section, subjectId: s.ids.subject }),
+  },
+  {
+    name: 'teacher-classes',
+    basePath: '/api/v1/teaching-assignments/teachers',
+    idFrom: 'teacher',
+    supports: { get: true },
+  },
+  {
+    name: 'holidays',
+    basePath: '/api/v1/attendance/holidays',
+    idFrom: 'holiday',
+    supports: { list: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({ name: `Endpoint holiday ${s.label}${seed}`.slice(0, 80), startDate: '2032-01-01' }),
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'student-attendance',
+    basePath: '/api/v1/attendance/students',
+    idFrom: 'student',
+    supports: { get: true },
+  },
+  {
+    name: 'employee-attendance',
+    basePath: '/api/v1/staff-attendance/employees',
+    idFrom: 'employee',
+    supports: { get: true },
+  },
+  {
+    name: 'students',
+    basePath: '/api/v1/students',
+    idFrom: 'student',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({
+      firstName: 'Endpoint',
+      lastName: `Student ${s.label}${seed}`,
+      dateOfBirth: '2015-06-01T00:00:00.000Z',
+      gender: 'FEMALE',
+      classId: s.ids.class,
+      sectionId: s.ids.section,
+      guardians: [{ firstName: 'Pat', lastName: 'Parent', phone: '+1-555-2222', relation: 'MOTHER' }],
+    }),
+    updateBody: { firstName: 'HIJACKED' },
+  },
+  {
+    name: 'guardians',
+    basePath: '/api/v1/guardians',
+    idFrom: 'guardian',
+    supports: { list: true, get: true, patch: true },
+    updateBody: { firstName: 'HIJACKED' },
+  },
+  {
+    name: 'members',
+    basePath: '/api/v1/members',
+    idFrom: 'schoolMembership',
+    // Writes are /:id/roles and /:id/status, not the generic PATCH/DELETE the
+    // probes know; those paths are covered in test/school-modules.test.ts.
+    supports: { list: true, get: true },
+  },
+  {
+    name: 'inventory-categories',
+    basePath: '/api/v1/inventory/categories',
+    idFrom: 'inventoryCategory',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({ name: `Endpoint Sports ${s.label}${seed}` }),
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'inventory-items',
+    basePath: '/api/v1/inventory/items',
+    idFrom: 'inventoryItem',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({
+      name: `Endpoint Football ${s.label}${seed}`,
+      categoryId: s.ids.inventoryCategory,
+    }),
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'inventory-movements',
+    basePath: '/api/v1/inventory/movements',
+    idFrom: 'inventoryMovement',
+    // Append-only ledger: list is the only surface. Writes go through
+    // /inventory/items/:id/movements, probed in test/school-modules.test.ts.
+    supports: { list: true },
+  },
+{
+    name: 'fee-heads',
+    basePath: '/api/v1/fees/heads',
+    idFrom: 'feeHead',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({ name: `Endpoint Lab ${s.label}${seed}`, code: `LB${token(s.label, seed)}`.slice(0, 12) }),
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'fee-structures',
+    basePath: '/api/v1/fees/structures',
+    idFrom: 'feeStructure',
+    // Create is one-per-class-per-session, and the fixture's class already has one:
+    // covered in test/finance-modules.test.ts instead.
+    supports: { list: true, get: true, patch: true, remove: true },
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'fee-concessions',
+    basePath: '/api/v1/fees/concessions',
+    idFrom: 'feeConcession',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({ studentId: s.ids.student, name: `Endpoint merit ${s.label}${seed}`, type: 'PERCENT', value: 5 }),
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'fee-invoices',
+    basePath: '/api/v1/fees/invoices',
+    idFrom: 'feeInvoice',
+    supports: { list: true, get: true, create: true },
+    createBody: (s, seed) => ({
+      studentId: s.ids.student,
+      lines: [{ name: `Admission ${seed}`.slice(0, 80), amountMinor: 5000 }],
+      periodLabel: 'Admission',
+      dueDate: '2030-01-01T00:00:00.000Z',
+    }),
+  },
+  {
+    name: 'fee-payments',
+    basePath: '/api/v1/fees/payments',
+    idFrom: 'feePayment',
+    supports: { list: true, get: true, create: true },
+    // The fixture's invoice is open, so a small payment against it is valid.
+    createBody: (s) => ({ studentId: s.ids.student, amountMinor: 100, method: 'CASH' }),
+  },
+  {
+    name: 'fee-defaulters',
+    basePath: '/api/v1/fees/defaulters',
+    idFrom: 'feeInvoice',
+    supports: { list: true },
+  },
+  {
+    name: 'payroll-components',
+    basePath: '/api/v1/payroll/components',
+    idFrom: 'salaryComponent',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({
+      name: `Endpoint medical ${s.label}${seed}`,
+      code: `MD${token(s.label, seed)}`.slice(0, 12),
+      type: 'EARNING',
+      calculation: 'FIXED',
+      defaultValue: 100,
+    }),
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'payroll-structures',
+    basePath: '/api/v1/payroll/structures',
+    idFrom: 'salaryStructure',
+    // Create is one-per-employee, and the fixture's employee has one: see the finance test.
+    supports: { list: true, get: true, patch: true, remove: true },
+    updateBody: { bankName: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'payroll-advances',
+    basePath: '/api/v1/payroll/advances',
+    idFrom: 'salaryAdvance',
+    supports: { list: true, get: true, create: true, remove: true },
+    createBody: (s) => ({ employeeId: s.ids.employee, amountMinor: 1000, installmentMinor: 100 }),
+  },
+  {
+    name: 'payroll-runs',
+    basePath: '/api/v1/payroll/runs',
+    idFrom: 'payrollRun',
+    supports: { list: true, get: true, create: true, remove: true },
+    createBody: (s, seed) => ({ month: seedMonth(s.label, seed, 2039).replace(/^\d{4}/, '2039') }),
+  },
+  {
+    name: 'payroll-staff',
+    basePath: '/api/v1/payroll/staff',
+    idFrom: 'employee',
+    // GET /:id is one employee's pay: structure, advances and payslips.
+    supports: { list: true, get: true },
+  },
+  {
+    name: 'payslips',
+    basePath: '/api/v1/payroll/payslips',
+    idFrom: 'payslip',
+    // A staff member's OWN payslips (/payroll/my-payslips) are covered in the finance test.
+    supports: { get: true, patch: true },
+    updateBody: { unpaidLeaveDays: 3 },
+  },
+  {
+    name: 'finance-categories',
+    basePath: '/api/v1/finance/categories',
+    idFrom: 'financeCategory',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({ name: `Endpoint repairs ${s.label}${seed}`, type: 'EXPENSE' }),
+    updateBody: { name: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'finance-entries',
+    basePath: '/api/v1/finance/entries',
+    idFrom: 'ledgerEntry',
+    supports: { list: true, get: true, create: true },
+    createBody: (s, seed) => ({
+      type: 'EXPENSE',
+      categoryId: s.ids.financeCategory,
+      amountMinor: 100,
+      date: '2026-01-01T00:00:00.000Z',
+      description: `Endpoint expense ${seed}`.slice(0, 200),
+    }),
+  },
+{
+    name: 'exams',
+    basePath: '/api/v1/exams',
+    idFrom: 'exam',
+    supports: { list: true, get: true, create: true, patch: true, remove: true },
+    createBody: (s, seed) => ({
+      name: `Endpoint exam ${s.label}${seed}`,
+      academicSessionId: s.ids.academicSession,
+      startDate: '2025-06-01T00:00:00.000Z',
+      endDate: '2025-06-05T00:00:00.000Z',
+    }),
+    updateBody: { description: 'HIJACKED OVER HTTP' },
+  },
+  {
+    name: 'exam-papers',
+    basePath: '/api/v1/exams/papers',
+    idFrom: 'examPaper',
+    // Papers are created through POST /exams/{id}/papers — covered in test/exams-modules.test.ts.
+    supports: { list: true, get: true, patch: true, remove: true },
+    updateBody: { startTime: '23:59' },
+  },
+  {
+    name: 'exam-results',
+    basePath: '/api/v1/exams/results',
+    idFrom: 'examResult',
+    // Results are written only by publishing — see test/exams-modules.test.ts.
+    supports: { list: true, get: true },
   },
 ];

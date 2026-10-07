@@ -5,7 +5,7 @@ type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 const TONE_CLASS: Record<Tone, string> = {
   neutral: 'bg-muted text-muted-foreground ring-border',
   success: 'bg-success-soft text-success ring-success/25',
-  warning: 'bg-warning-soft text-warning-foreground ring-warning/35',
+  warning: 'bg-warning-soft text-warning-ink ring-warning/35',
   danger: 'bg-destructive-soft text-destructive ring-destructive/25',
   info: 'bg-info-soft text-info ring-info/25',
 };
@@ -52,6 +52,14 @@ const STATUS_TONES: Record<string, Tone> = {
   PUBLISHED: 'success',
   VERIFIED: 'success',
   LOCKED: 'neutral',
+  // Exams
+  OPEN: 'info',
+  SUBMITTED: 'warning',
+  SETUP: 'neutral',
+  IN_PROGRESS: 'info',
+  PARTLY_PUBLISHED: 'warning',
+  PASS: 'success',
+  FAIL: 'danger',
 };
 
 /** PENDING → "Pending", PARTIALLY_PAID → "Partially paid". */

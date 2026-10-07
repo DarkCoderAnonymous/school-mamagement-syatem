@@ -56,7 +56,8 @@ export default function AcademicSessionsPage() {
   });
 
   const setCurrent = useMutation({
-    mutationFn: (session: AcademicSession) => updateAcademicSession(session._id, { isCurrent: true }),
+    mutationFn: (session: AcademicSession) =>
+      updateAcademicSession(session._id, { isCurrent: true }),
     onSuccess: async (_data, session) => {
       await queryClient.invalidateQueries({ queryKey: ['academic-sessions'] });
       toast.success(`${session.name} is now the current session`);
@@ -73,7 +74,9 @@ export default function AcademicSessionsPage() {
       setArchiving(undefined);
     },
     onError: (error: unknown) =>
-      toast.error(error instanceof ApiRequestError ? error.message : "Couldn't archive the session"),
+      toast.error(
+        error instanceof ApiRequestError ? error.message : "Couldn't archive the session",
+      ),
   });
 
   const columns = useMemo<DataTableColumn<AcademicSession>[]>(
@@ -189,7 +192,9 @@ export default function AcademicSessionsPage() {
         sortableColumns={['name', 'startDate', 'endDate']}
         getRowId={(row) => row._id}
         exportFileName="academic-sessions"
-        emptyTitle={url.get('search') ? 'No sessions match your search' : 'No academic sessions yet'}
+        emptyTitle={
+          url.get('search') ? 'No sessions match your search' : 'No academic sessions yet'
+        }
         emptyDescription={
           url.get('search')
             ? 'Try a different name, or clear the search.'

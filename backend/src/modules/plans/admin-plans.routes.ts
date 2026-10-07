@@ -2,13 +2,14 @@ import { Router } from 'express';
 import { Permission } from '@sms/shared';
 import { authenticate } from '../../middleware/auth.middleware';
 import { requirePermission } from '../../middleware/requirePermission';
+import { requirePlatformAccount } from '../../middleware/requirePlatformAccount';
 import { validate } from '../../middleware/validate.middleware';
-import { createPlanSchema, planIdParamsSchema, updatePlanSchema } from './plans.validation';
+import { createPlanSchema, listPlansQuerySchema, planIdParamsSchema, updatePlanSchema } from './plans.validation';
 import { createPlanHandler, getPlanHandler, listPlansHandler, updatePlanHandler } from './plans.controller';
 
 const router = Router();
 
-router.use(authenticate, requirePermission(Permission.PLAN_MANAGE));
+router.use(authenticate, requirePlatformAccount, requirePermission(Permission.PLAN_MANAGE));
 
 /**
  * @openapi
@@ -22,7 +23,7 @@ router.use(authenticate, requirePermission(Permission.PLAN_MANAGE));
  *     tags: [Admin - Plans]
  *     security: [{ bearerAuth: [] }]
  */
-router.get('/', listPlansHandler);
+router.get('/', validate({ query: listPlansQuerySchema }), listPlansHandler);
 router.post('/', validate({ body: createPlanSchema }), createPlanHandler);
 
 /**

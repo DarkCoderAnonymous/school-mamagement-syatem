@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { validate } from '../../middleware/validate.middleware';
+import { registrationStatusLimiter, registrationSubmitLimiter } from '../../middleware/rateLimiter';
 import { registrationStatusQuerySchema, submitRegistrationSchema } from './registrations.validation';
 import { registrationStatusHandler, submitRegistrationHandler } from './registrations.controller';
 
@@ -12,7 +13,7 @@ const router = Router();
  *     summary: Submit a school registration application (public)
  *     tags: [Registrations]
  */
-router.post('/', validate({ body: submitRegistrationSchema }), submitRegistrationHandler);
+router.post('/', registrationSubmitLimiter, validate({ body: submitRegistrationSchema }), submitRegistrationHandler);
 
 /**
  * @openapi
@@ -26,6 +27,6 @@ router.post('/', validate({ body: submitRegistrationSchema }), submitRegistratio
  *         required: true
  *         schema: { type: string }
  */
-router.get('/status', validate({ query: registrationStatusQuerySchema }), registrationStatusHandler);
+router.get('/status', registrationStatusLimiter, validate({ query: registrationStatusQuerySchema }), registrationStatusHandler);
 
 export default router;

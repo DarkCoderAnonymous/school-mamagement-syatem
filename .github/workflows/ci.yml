@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, master]
 
+# The job only reads the repo; the token gets nothing more.
+permissions:
+  contents: read
+
 # A newer push to the same branch makes an in-flight run redundant.
 concurrency:
   group: ci-${{ github.ref }}

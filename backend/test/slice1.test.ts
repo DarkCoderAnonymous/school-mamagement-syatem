@@ -7,6 +7,7 @@ import { Plan } from '../src/models/Plan';
 import { School } from '../src/models/School';
 import { Subscription } from '../src/models/Subscription';
 import { RoleModel } from '../src/models/Role';
+import { AuditLog } from '../src/models/AuditLog';
 import { User } from '../src/models/User';
 import { SchoolMembership } from '../src/models/SchoolMembership';
 import { hashPassword } from '../src/utils/password';
@@ -14,6 +15,7 @@ import { TenantContext } from '../src/tenant/context';
 import { asSystem } from './helpers/as-system';
 import { redis } from '../src/config/redis';
 import { enqueueMail, mailerQueue } from '../src/jobs/mailer.queue';
+import { invalidateSchoolAccess } from '../src/services/auth-freshness.service';
 
 const app = createApp();
 
@@ -108,7 +110,7 @@ describe('Slice 1: registration -> approval -> login', () => {
 
     const roles = await RoleModel.find({ schoolId: school._id }).lean();
     expect(roles.map((r) => r.name).sort()).toEqual(
-      [Role.SCHOOL_ADMIN, Role.ACCOUNTANT, Role.EXAM_CONTROLLER, Role.TEACHER, Role.PARENT, Role.STUDENT].sort(),
+      [Role.SCHOOL_ADMIN, Role.PRINCIPAL, Role.ACCOUNTANT, Role.EXAM_CONTROLLER, Role.TEACHER, Role.PARENT, Role.STUDENT].sort(),
     );
 
     const adminUser = await asSystem(() => User.findOne({ email: adminEmail }).lean());
@@ -152,6 +154,73 @@ describe('Slice 1: registration -> approval -> login', () => {
     expect(res.body.data.accessToken).toBeTruthy();
   });
 
+  it('runs the school in the currency chosen at registration', async () => {
+    const { school, adminEmail, tempPassword } = await submitAndApprove({ currency: 'PKR' });
+    expect(school.currency).toBe('PKR');
+    const stored = await School.findById(school._id).lean();
+    expect(stored?.currency).toBe('PKR');
+
+    const login = await request(app).post('/api/v1/auth/login').send({ email: adminEmail, password: tempPassword }).expect(200);
+    expect(login.body.data.user.schoolCurrency).toBe('PKR');
+    const me = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${login.body.data.accessToken}`).expect(200);
+    expect(me.body.data.schoolCurrency).toBe('PKR');
+  });
+
+  it('defaults the currency for older clients and refuses one it cannot handle', async () => {
+    const { school } = await submitAndApprove();
+    expect(school.currency).toBe('USD');
+
+    // Not a currency, and a three-decimal one the minor-unit maths can't represent.
+    for (const currency of ['XYZ', 'KWD']) {
+      const res = await request(app).post('/api/v1/registrations').send(uniqueRegistrationPayload({ currency })).expect(400);
+      expect(JSON.stringify(res.body.error.details)).toContain('currency');
+    }
+  });
+
+  it("lets a school admin pick their own school's palette, and only theirs", async () => {
+    const a = await submitAndApprove();
+    const b = await submitAndApprove();
+    // A temporary-password session only reaches /auth (L4), so — like every
+    // other suite's fixture — clear the first-login flag before using the API.
+    const signIn = async (email: string, password: string) => {
+      await asSystem(() => User.updateOne({ email }, { $set: { mustChangePassword: false } }));
+      return (await request(app).post('/api/v1/auth/login').send({ email, password }).expect(200)).body.data.accessToken as string;
+    };
+    const tokenA = await signIn(a.adminEmail, a.tempPassword);
+    const tokenB = await signIn(b.adminEmail, b.tempPassword);
+    const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    const before = await request(app).get('/api/v1/school-settings').set(auth(tokenA)).expect(200);
+    expect(before.body.data).toMatchObject({ theme: 'blue', currency: 'USD' });
+
+    const saved = await request(app).patch('/api/v1/school-settings').set(auth(tokenA)).send({ theme: 'emerald' }).expect(200);
+    expect(saved.body.data).toMatchObject({ theme: 'emerald', primaryColor: '#01614d' });
+    const me = await request(app).get('/api/v1/auth/me').set(auth(tokenA)).expect(200);
+    expect(me.body.data).toMatchObject({ schoolTheme: 'emerald', schoolPrimaryColor: '#01614d' });
+
+    // The other school is untouched, and there is no way to name it.
+    const other = await request(app).get('/api/v1/auth/me').set(auth(tokenB)).expect(200);
+    expect(other.body.data.schoolTheme).toBe('blue');
+    await request(app).patch('/api/v1/school-settings').set(auth(tokenA)).send({ theme: 'teal', schoolId: b.school._id }).expect(400);
+    await request(app).patch('/api/v1/school-settings').set(auth(tokenA)).send({ theme: 'neon-green' }).expect(400);
+
+    const audit = await AuditLog.findOne({ action: 'school.settings.update', entityId: a.school._id }).lean();
+    expect(audit?.after).toMatchObject({ theme: 'emerald' });
+  });
+
+  it('keeps the platform console away from school accounts', async () => {
+    const { school, adminEmail, tempPassword } = await submitAndApprove();
+    const login = await request(app).post('/api/v1/auth/login').send({ email: adminEmail, password: tempPassword }).expect(200);
+    const auth = { Authorization: `Bearer ${login.body.data.accessToken}` };
+    // A school admin holds `school.read` for their own school — which must not open every school.
+    await request(app).get('/api/v1/admin/schools').set(auth).expect(403);
+    await request(app).get(`/api/v1/admin/schools/${school._id}`).set(auth).expect(403);
+    await request(app).get('/api/v1/admin/registrations').set(auth).expect(403);
+    await request(app).get('/api/v1/admin/plans').set(auth).expect(403);
+    // The super admin still has all of it.
+    await request(app).get('/api/v1/admin/schools').set('Authorization', `Bearer ${superAdminToken}`).expect(200);
+  });
+
   it('blocks login when the school has been suspended', async () => {
     const { school, adminEmail, tempPassword } = await submitAndApprove();
 
@@ -164,6 +233,50 @@ describe('Slice 1: registration -> approval -> login', () => {
     const res = await request(app).post('/api/v1/auth/login').send({ email: adminEmail, password: tempPassword });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('SCHOOL_SUSPENDED');
+  });
+
+  it('ends sessions already signed in when the school is suspended, and restores them on reactivation', async () => {
+    const { school, adminEmail, tempPassword } = await submitAndApprove();
+    const login = await request(app).post('/api/v1/auth/login').send({ email: adminEmail, password: tempPassword }).expect(200);
+    const { accessToken, refreshToken } = login.body.data as { accessToken: string; refreshToken: string };
+    await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${accessToken}`).expect(200);
+
+    const setStatus = (status: string) =>
+      request(app).patch(`/api/v1/admin/schools/${school._id}/status`).set('Authorization', `Bearer ${superAdminToken}`).send({ status }).expect(200);
+    await setStatus('SUSPENDED');
+
+    // The very next request is refused with a 401, so clients try a refresh…
+    const blocked = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${accessToken}`);
+    expect(blocked.status).toBe(401);
+    expect(blocked.body.error.code).toBe('SCHOOL_SUSPENDED');
+    // …which refuses too, and the client signs them out.
+    const refused = await request(app).post('/api/v1/auth/refresh').send({ refreshToken });
+    expect(refused.status).toBe(403);
+    expect(refused.body.error.code).toBe('SCHOOL_SUSPENDED');
+
+    // The super admin is never caught by a school's suspension.
+    await request(app).get('/api/v1/admin/schools').set('Authorization', `Bearer ${superAdminToken}`).expect(200);
+
+    // Reactivating lets the same session straight back in.
+    await setStatus('ACTIVE');
+    await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${accessToken}`).expect(200);
+    await request(app).post('/api/v1/auth/refresh').send({ refreshToken }).expect(200);
+  });
+
+  it('ends sessions when the school subscription is no longer active', async () => {
+    const { school, adminEmail, tempPassword } = await submitAndApprove();
+    const login = await request(app).post('/api/v1/auth/login').send({ email: adminEmail, password: tempPassword }).expect(200);
+    const { accessToken, refreshToken } = login.body.data as { accessToken: string; refreshToken: string };
+
+    await Subscription.updateMany({ schoolId: school._id }, { $set: { status: 'CANCELLED' } });
+    invalidateSchoolAccess(String(school._id));
+
+    const blocked = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${accessToken}`);
+    expect(blocked.status).toBe(401);
+    expect(blocked.body.error.code).toBe('SUBSCRIPTION_INACTIVE');
+    const refused = await request(app).post('/api/v1/auth/refresh').send({ refreshToken });
+    expect(refused.status).toBe(403);
+    expect(refused.body.error.code).toBe('SUBSCRIPTION_INACTIVE');
   });
 
   it('rotates the refresh token and rejects reuse of an already-rotated token', async () => {

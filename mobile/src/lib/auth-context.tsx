@@ -1,7 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { AuthUser, MembershipSummary } from '@sms/shared';
 import { tokenStorage } from './token-storage';
+import { setOnUnauthorized } from './api-client';
+import { setSchoolCurrency } from './format';
+import { setSchoolPalette } from './school-palette';
 import * as authApi from './api/auth';
+import { ApiRequestError } from './api/http';
 
 type SessionStatus = 'loading' | 'signed-in' | 'signed-out';
 
@@ -38,6 +43,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [pendingSelection, setPendingSelection] = useState<PendingSelection | null>(null);
+  const queryClient = useQueryClient();
+
+  // Money and the accent colour follow the active school; set them before the
+  // user lands in state so the first render already uses them.
+  const applyUser = useCallback((next: AuthUser | null) => {
+    setSchoolCurrency(next?.schoolCurrency);
+    setSchoolPalette(next?.schoolTheme);
+    setUser(next);
+  }, []);
+
+  // A refresh refused mid-session (revoked, removed, school suspended) lands
+  // the person back on sign-in, where logging in again says why.
+  useEffect(
+    () =>
+      setOnUnauthorized(() => {
+        queryClient.clear();
+        applyUser(null);
+        setPendingSelection(null);
+        setStatus('signed-out');
+      }),
+    [queryClient, applyUser],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -51,20 +78,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       try {
         const me = await authApi.me();
         if (cancelled) return;
-        setUser(me);
+        applyUser(me);
         setStatus('signed-in');
-      } catch {
-        if (!cancelled) {
+      } catch (err) {
+        if (cancelled) return;
+        // Only the server refusing the session (401/403) ends it. Offline, a
+        // timeout or a 5xx lands on sign-in with the tokens kept, so the next
+        // launch restores the session instead of forcing a new sign-in.
+        if (err instanceof ApiRequestError && (err.status === 401 || err.status === 403)) {
           await tokenStorage.clear();
-          setStatus('signed-out');
         }
+        setStatus('signed-out');
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyUser]);
 
   const value = useMemo<SessionContextValue>(
     () => ({
@@ -73,8 +104,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       pendingSelection,
       setPendingSelection,
       async signIn(nextUser, accessToken, refreshToken) {
+        // A new session — possibly another school or person — starts with an
+        // empty cache, so nothing from the previous one can show.
+        queryClient.clear();
         await tokenStorage.setTokens(accessToken, refreshToken);
-        setUser(nextUser);
+        applyUser(nextUser);
         setPendingSelection(null);
         setStatus('signed-in');
       },
@@ -86,16 +120,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           // best-effort — still clear local state even if the request fails
         }
         await tokenStorage.clear();
-        setUser(null);
+        queryClient.clear();
+        applyUser(null);
         setPendingSelection(null);
         setStatus('signed-out');
       },
       async refreshUser() {
         const me = await authApi.me();
-        setUser(me);
+        applyUser(me);
       },
     }),
-    [user, status, pendingSelection],
+    [user, status, pendingSelection, queryClient, applyUser],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

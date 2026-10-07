@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link, router } from 'expo-router';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Button } from '@/components/ui/button';
+import { Banner } from '@/components/ui/primitives';
+import { AuthHeader } from '@/components/ui/auth-header';
 import { TextField } from '@/components/ui/text-field';
 import { login } from '@/lib/api/auth';
 import { ApiRequestError } from '@/lib/api/http';
@@ -52,18 +54,13 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 bg-white">
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 bg-background">
       <ScrollView contentContainerClassName="flex-1 justify-center px-6" keyboardShouldPersistTaps="handled">
-        <View className="gap-4">
-          <View className="gap-1">
-            <Text className="text-2xl font-semibold">Sign in</Text>
-            <Text className="text-sm text-gray-500">Use your school-issued credentials</Text>
-          </View>
+        <View className="gap-5">
+          <AuthHeader title="Welcome back" subtitle="Sign in with the email your school registered for you." />
 
           {error && (
-            <View className="rounded-lg bg-red-50 p-3">
-              <Text className="text-sm text-red-700">{error}</Text>
-            </View>
+            <Banner tone="danger">{error}</Banner>
           )}
 
           <TextField
@@ -85,7 +82,7 @@ export default function LoginScreen() {
 
           <Button label={loading ? 'Signing in…' : 'Sign in'} loading={loading} onPress={onSubmit} />
 
-          <Link href="/forgot-password" className="text-center text-sm text-gray-500">
+          <Link href="/forgot-password" className="text-center text-sm font-medium text-primary">
             Forgot password?
           </Link>
         </View>

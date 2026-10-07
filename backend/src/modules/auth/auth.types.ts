@@ -17,6 +17,13 @@ export interface AccessTokenPayload {
   permissions: string[]; // union of this membership's roles' permission codes
   /** Value of SchoolMembership.permissionsEpoch when this token was minted. */
   permissionsEpoch: number;
+  /**
+   * The account still has its temporary password: `authenticate` allows only
+   * the /auth self-service routes. Cleared by changing the password, which
+   * also ends every session — so no live token outlasts the flag. Optional so
+   * tokens minted before this claim existed stay valid.
+   */
+  mustChangePassword?: boolean;
   /** Set by jsonwebtoken; compared against User.sessionsValidFrom. */
   iat?: number;
 }

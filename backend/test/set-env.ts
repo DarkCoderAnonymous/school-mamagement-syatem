@@ -18,4 +18,10 @@ process.env.REDIS_URL = 'redis://127.0.0.1:1';
 // the default (20 per 15 min) would turn ordinary test setup into 429s. The
 // limiter itself still runs — only the ceiling is raised.
 process.env.AUTH_RATE_LIMIT_MAX ??= '1000';
+// Same reasoning for the per-user API budget and the public registration
+// endpoint, which every suite's fixtures hit from the one test "IP". Tests of
+// those limiters build their own with low ceilings (rate-limits.test.ts).
+process.env.API_RATE_LIMIT_MAX ??= '100000';
+process.env.REGISTRATION_RATE_LIMIT_MAX ??= '100000';
+process.env.HEAVY_RATE_LIMIT_MAX ??= '100000';
 process.env.NODE_ENV = 'test';

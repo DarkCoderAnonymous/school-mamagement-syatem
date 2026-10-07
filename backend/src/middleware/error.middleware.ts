@@ -21,14 +21,22 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     return;
   }
 
+  // Field names only, never values: Mongoose's messages and `err.errors`
+  // echo the rejected value and schema internals back to the caller. The
+  // shape matches Zod's (`fieldErrors`) so forms can still point at the field.
   if (err instanceof mongoose.Error.ValidationError) {
-    respond(res, 400, 'VALIDATION_ERROR', err.message, err.errors);
+    const fieldErrors = Object.fromEntries(Object.keys(err.errors).map((path) => [path, ['Invalid value']]));
+    respond(res, 400, 'VALIDATION_ERROR', 'Validation failed', { fieldErrors });
     return;
   }
 
+  // Which field clashed, not the value it clashed on (that would confirm,
+  // say, that an email is registered). `schoolId` leads most compound keys
+  // and is never what the user can fix.
   if (typeof err === 'object' && err !== null && 'code' in err && (err as { code: unknown }).code === 11000) {
-    const keyValue = (err as { keyValue?: unknown }).keyValue;
-    respond(res, 409, 'CONFLICT', 'A record with this value already exists', keyValue);
+    const keyValue = (err as { keyValue?: Record<string, unknown> }).keyValue ?? {};
+    const field = Object.keys(keyValue).find((k) => k !== 'schoolId');
+    respond(res, 409, 'CONFLICT', 'A record with this value already exists', field ? { field } : undefined);
     return;
   }
 

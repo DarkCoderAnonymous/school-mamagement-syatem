@@ -6,6 +6,9 @@ const teacherSchema = createTenantSchema({
   employeeId: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
   subjectIds: [{ type: Schema.Types.ObjectId, ref: 'Subject' }],
   qualification: { type: String, trim: true },
+  specialization: { type: String, trim: true },
+  /** Years of teaching before joining this school — for timetabling seniority. */
+  experienceYears: { type: Number, min: 0, default: 0 },
 });
 
 /**
@@ -24,6 +27,8 @@ teacherSchema.index(
   { schoolId: 1, employeeId: 1 },
   { unique: true, partialFilterExpression: { deletedAt: null } },
 );
+// "Who teaches Physics?" — the subject filter on the teacher list.
+teacherSchema.index({ schoolId: 1, deletedAt: 1, subjectIds: 1 });
 
 export interface TeacherDoc {
   _id: Types.ObjectId;
@@ -31,6 +36,8 @@ export interface TeacherDoc {
   employeeId: Types.ObjectId;
   subjectIds: Types.ObjectId[];
   qualification?: string;
+  specialization?: string;
+  experienceYears: number;
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;

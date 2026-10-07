@@ -4,6 +4,10 @@ import { AppError } from '../../utils/AppError';
 import { buildPaginationMeta } from '../../utils/response';
 import { parsePaginationQuery } from '../../utils/paginate';
 import { recordAudit } from '../../utils/audit';
+import { restrictSort, searchRegex } from '../../utils/query';
+
+/** Sortable columns (the sessions table sorts by name and dates). */
+const SESSION_SORT_FIELDS = ['name', 'startDate', 'endDate', 'createdAt'] as const;
 import type { CreateAcademicSessionInput, UpdateAcademicSessionInput } from './academic-sessions.validation';
 
 export interface ActorMeta {
@@ -23,11 +27,11 @@ export async function listAcademicSessions(query: Record<string, unknown>) {
   const { page, limit, skip, sort, search } = parsePaginationQuery(query);
 
   const filter: Record<string, unknown> = { deletedAt: null };
-  if (search) filter.name = new RegExp(search, 'i');
+  if (search) filter.name = searchRegex(search);
   if (typeof query.isCurrent === 'boolean') filter.isCurrent = query.isCurrent;
 
   const [items, total] = await Promise.all([
-    AcademicSession.find(filter).sort(sort).skip(skip).limit(limit).lean(),
+    AcademicSession.find(filter).sort(restrictSort(sort, SESSION_SORT_FIELDS, { createdAt: -1 })).skip(skip).limit(limit).lean(),
     AcademicSession.countDocuments(filter),
   ]);
 

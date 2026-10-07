@@ -30,8 +30,18 @@ export function Pagination({ meta }: { meta: PaginationMeta }) {
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-      <p className="text-muted-foreground text-sm tabular-nums">
-        {total === 0 ? 'No results' : `${first}–${last} of ${total}`}
+      {/* Keyed on the range, so a new page or filter briefly fades the count in — the change is acknowledged. */}
+      <p key={`${first}-${last}-${total}`} className="text-muted-foreground animate-fade-in text-sm tabular-nums" aria-live="polite">
+        {total === 0 ? (
+          'No results'
+        ) : (
+          <>
+            <span className="text-foreground font-medium">
+              {first}–{last}
+            </span>{' '}
+            of {total}
+          </>
+        )}
       </p>
 
       <div className="flex items-center gap-4">
@@ -54,7 +64,7 @@ export function Pagination({ meta }: { meta: PaginationMeta }) {
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => url.set({ page: page - 1 })}
             disabled={page <= 1}
             aria-label="Previous page"
@@ -66,7 +76,7 @@ export function Pagination({ meta }: { meta: PaginationMeta }) {
           </span>
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => url.set({ page: page + 1 })}
             disabled={page >= totalPages}
             aria-label="Next page"

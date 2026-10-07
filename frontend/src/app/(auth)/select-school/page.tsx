@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, ChevronRight } from 'lucide-react';
+import { AlertCircle, Building2, ChevronRight, Loader2 } from 'lucide-react';
 import { Role } from '@sms/shared';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AuthHeading } from '@/components/public/auth-shell';
+import { stagger } from '@/lib/motion';
 import { selectSchool } from '@/lib/api/auth';
 import { ApiRequestError } from '@/lib/api/http';
 import { useAuthStore } from '@/lib/auth-store';
@@ -24,18 +26,24 @@ import { useAuthStore } from '@/lib/auth-store';
 export default function SelectSchoolPage() {
   const router = useRouter();
   const pending = useAuthStore((s) => s.pendingSelection);
+  const signedIn = useAuthStore((s) => s.status === 'authenticated');
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Choosing a school clears `pending` too (setSession) — that's success, not
+  // a stale visit, so it must not bounce to /login. It used to, and since this
+  // effect runs after `choose` navigated, its /login replace won: picking a
+  // school landed the person back on sign-in.
   useEffect(() => {
-    if (!pending) router.replace('/login');
-  }, [pending, router]);
+    if (!pending && !signedIn) router.replace('/login');
+  }, [pending, signedIn, router]);
 
   if (!pending) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-4" aria-busy="true">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-36 w-full rounded-xl" />
       </div>
     );
   }
@@ -64,37 +72,38 @@ export default function SelectSchoolPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1 text-center">
-        <h1 className="text-2xl font-semibold">Choose a school</h1>
-        <p className="text-muted-foreground text-sm">
-          Your account has access to more than one school. Pick the one you want to work in — you can switch
-          at any time.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <AuthHeading
+        title="Choose a school"
+        description="Your account has access to more than one school. Pick where you want to work — you can switch at any time."
+      />
 
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="animate-shake">
+          <AlertCircle aria-hidden="true" />
           <AlertTitle>Couldn&apos;t open that school</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      <ul className="divide-y rounded-lg border">
-        {pending.memberships.map((membership) => (
-          <li key={membership.membershipId}>
+      <ul className="bg-card divide-y overflow-hidden rounded-xl border">
+        {pending.memberships.map((membership, i) => (
+          <li key={membership.membershipId} className="animate-fade-up" style={stagger(i, 60, 150)}>
             <button
               type="button"
               onClick={() => void choose(membership.schoolId)}
               disabled={submitting !== null}
-              className="hover:bg-muted focus-visible:ring-ring flex w-full items-center gap-3 p-4 text-left transition-colors outline-none focus-visible:ring-2 disabled:opacity-60"
+              aria-busy={submitting === membership.schoolId}
+              className="group hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-ring/50 flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Avatar
-                className="size-9 shrink-0"
+                className="size-10 shrink-0 rounded-lg after:rounded-lg"
                 style={{ backgroundColor: membership.schoolPrimaryColor ?? undefined }}
               >
-                {membership.schoolLogoUrl && <AvatarImage src={membership.schoolLogoUrl} alt="" />}
-                <AvatarFallback className="text-xs">
+                {membership.schoolLogoUrl && (
+                  <AvatarImage src={membership.schoolLogoUrl} alt="" className="rounded-lg" />
+                )}
+                <AvatarFallback className="rounded-lg text-sm font-medium">
                   {membership.schoolName?.[0] ?? <Building2 className="size-4" />}
                 </AvatarFallback>
               </Avatar>
@@ -103,15 +112,18 @@ export default function SelectSchoolPage() {
                 <p className="truncate text-sm font-medium">{membership.schoolName}</p>
                 {/* The role often differs per school — it's how someone tells
                     "where I teach" from "where I'm a parent". */}
-                <p className="text-muted-foreground truncate text-xs">
+                <p className="text-muted-foreground truncate text-xs capitalize">
                   {membership.roles.map((r) => r.replace(/_/g, ' ').toLowerCase()).join(', ')}
                 </p>
               </div>
 
               {submitting === membership.schoolId ? (
-                <span className="text-muted-foreground text-xs">Opening…</span>
+                <Loader2
+                  className="text-muted-foreground size-4 shrink-0 animate-spin"
+                  aria-label="Opening"
+                />
               ) : (
-                <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+                <ChevronRight className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
               )}
             </button>
           </li>
@@ -120,7 +132,7 @@ export default function SelectSchoolPage() {
 
       <Button
         variant="ghost"
-        className="w-full"
+        className="text-muted-foreground h-10 w-full"
         onClick={() => {
           useAuthStore.getState().clear();
           router.replace('/login');

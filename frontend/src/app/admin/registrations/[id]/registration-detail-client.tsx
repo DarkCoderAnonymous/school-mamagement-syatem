@@ -27,6 +27,13 @@ import {
 } from '@/lib/api/registrations';
 import { ApiRequestError } from '@/lib/api/http';
 import type { ApproveRegistrationResult } from '@/lib/api/types';
+import { DEFAULT_SCHOOL_CURRENCY, SCHOOL_CURRENCIES } from '@sms/shared';
+
+/** "PKR — Pakistani rupee"; the code alone for anything off the list. */
+const currencyLabel = (code: string) => {
+  const c = SCHOOL_CURRENCIES.find((x) => x.code === code);
+  return c ? `${c.code} — ${c.name}` : code;
+};
 
 export function RegistrationDetailClient({ id }: { id: string }) {
   const queryClient = useQueryClient();
@@ -110,6 +117,10 @@ export function RegistrationDetailClient({ id }: { id: string }) {
           <div>
             <p className="text-muted-foreground">Location</p>
             <p>{[reg.city, reg.country].filter(Boolean).join(', ') || '—'}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Currency</p>
+            <p>{currencyLabel(reg.currency ?? DEFAULT_SCHOOL_CURRENCY)}</p>
           </div>
           <div>
             <p className="text-muted-foreground">Curriculum</p>

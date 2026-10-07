@@ -5,8 +5,9 @@ import { createPlatformSchema } from './base';
  * Role is a DB collection (not a hardcoded enum) so schools can define
  * custom roles later. System roles (SUPER_ADMIN, SCHOOL_ADMIN, ACCOUNTANT,
  * EXAM_CONTROLLER, TEACHER, PARENT, STUDENT — from @sms/shared's Role enum)
- * are seeded with `schoolId: null`. A school may add its own custom roles
- * with its own schoolId.
+ * are seeded with `schoolId: null`, and each school gets its own copy of the
+ * school-level ones (`isSystem: true`). A school may add custom roles
+ * (`isSystem: false`) through modules/roles; only those are editable.
  *
  * DESIGN CHOICE: Permission is embedded as an array of permission-key
  * strings on Role (`permissions: string[]`) rather than separate
@@ -31,7 +32,8 @@ const roleSchema = createPlatformSchema({
   description: { type: String, trim: true },
 });
 
-roleSchema.index({ schoolId: 1, name: 1 }, { unique: true });
+// Partial, so a deleted custom role's name can be reused (deletes are soft).
+roleSchema.index({ schoolId: 1, name: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
 
 export interface RoleDoc {
   _id: Types.ObjectId;

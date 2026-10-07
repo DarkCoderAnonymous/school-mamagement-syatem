@@ -15,7 +15,9 @@ import apiRouter from './routes/index';
 export function createApp(): Express {
   const app = express();
 
-  app.set('trust proxy', 1);
+  // Must match the real proxy chain in front of the API (env TRUST_PROXY,
+  // default one hop). req.ip — and so every per-IP limit — depends on it.
+  app.set('trust proxy', env.TRUST_PROXY);
   app.use(helmet());
 
   const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
@@ -36,7 +38,10 @@ export function createApp(): Express {
   app.use('/api/v1/auth', authRateLimiter);
   app.use('/api/v1', apiRouter);
 
-  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  // The full API map is a development aid, not something to publish.
+  if (env.NODE_ENV !== 'production') {
+    app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

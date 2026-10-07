@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import type { Role } from '@sms/shared';
 import { useAuthStore } from '@/lib/auth-store';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,10 +35,15 @@ export function RequireAuth({ children, allowRoles, denyRoles, forbiddenMessage 
   const status = useAuthStore((s) => s.status);
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
+  const pathname = usePathname();
+  // A temporary password must be replaced before anything else: the API refuses
+  // every non-/auth call until it is (PASSWORD_CHANGE_REQUIRED).
+  const mustChangePassword = !!user?.mustChangePassword && pathname !== '/change-password';
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login');
-  }, [status, router]);
+    else if (mustChangePassword) router.replace('/change-password');
+  }, [status, mustChangePassword, router]);
 
   if (status === 'idle' || status === 'loading') {
     return (
@@ -49,7 +54,7 @@ export function RequireAuth({ children, allowRoles, denyRoles, forbiddenMessage 
     );
   }
 
-  if (status === 'unauthenticated' || !user) {
+  if (status === 'unauthenticated' || !user || mustChangePassword) {
     return null;
   }
 

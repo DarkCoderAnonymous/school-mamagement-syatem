@@ -1,3 +1,4 @@
+import { DEFAULT_SCHOOL_CURRENCY } from '@sms/shared';
 import { useAuthStore } from './auth-store';
 
 /**
@@ -5,6 +6,11 @@ import { useAuthStore } from './auth-store';
  * (CLAUDE.md), so formatting is the only place it becomes a decimal — and
  * parsing is the only place it stops being one. Never store the float.
  */
+/** "$12.9K" — for chart axes and tight spaces, never for a figure someone reconciles. */
+export function formatMoneyCompact(minor: number, currency = 'USD', locale = 'en'): string {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(minor / 100);
+}
+
 export function formatMoney(
   minor: number,
   currency = 'USD',
@@ -63,13 +69,13 @@ export function formatPercent(value: number, locale = 'en', fractionDigits = 1):
 }
 
 /**
- * School-aware formatters. Currency/locale/timezone live on the School record;
- * until the school-settings endpoint exposes them on /auth/me we fall back to
- * the same defaults the School schema declares (USD / en / UTC).
+ * School-aware formatters. Currency comes from the active school (chosen at
+ * registration, on /auth/me); locale and timezone still fall back to the
+ * School schema's defaults (en / UTC) until school settings expose them.
  */
 export function useSchoolFormat() {
   const user = useAuthStore((s) => s.user);
-  const currency = 'USD';
+  const currency = user?.schoolCurrency ?? DEFAULT_SCHOOL_CURRENCY;
   const locale = 'en';
   const timeZone = 'UTC';
 
@@ -79,6 +85,7 @@ export function useSchoolFormat() {
     timeZone,
     schoolName: user?.schoolName ?? null,
     money: (minor: number) => formatMoney(minor, currency, locale),
+    moneyCompact: (minor: number) => formatMoneyCompact(minor, currency, locale),
     date: (iso: string | Date | null | undefined, withTime = false) =>
       formatDate(iso, { locale, timeZone, withTime }),
     number: (value: number) => formatNumber(value, locale),

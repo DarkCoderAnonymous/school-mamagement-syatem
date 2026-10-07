@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { AuthHeader } from '@/components/ui/auth-header';
 import { Button } from '@/components/ui/button';
+import { Banner } from '@/components/ui/primitives';
 import { TextField } from '@/components/ui/text-field';
 import { changePassword } from '@/lib/api/auth';
 import { ApiRequestError } from '@/lib/api/http';
 import { useSession } from '@/lib/auth-context';
 
 export default function ChangePasswordScreen() {
-  const { user, refreshUser, signOut } = useSession();
+  const { user, signOut } = useSession();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -23,7 +26,10 @@ export default function ChangePasswordScreen() {
     setLoading(true);
     try {
       await changePassword(currentPassword, newPassword);
-      await refreshUser();
+      // The server ends every session on a password change, this one included
+      // (ADR-005), so the stored tokens are dead — sign in again.
+      await signOut();
+      Alert.alert('Password updated', "For your security you've been signed out everywhere. Sign in with your new password.");
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Something went wrong');
     } finally {
@@ -32,23 +38,19 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 bg-white">
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 bg-background">
       <ScrollView contentContainerClassName="flex-1 justify-center px-6" keyboardShouldPersistTaps="handled">
-        <View className="gap-4">
-          <View className="gap-1">
-            <Text className="text-2xl font-semibold">Set a new password</Text>
-            <Text className="text-sm text-gray-500">
-              {user?.mustChangePassword
-                ? 'You must change your temporary password before continuing.'
-                : 'Update your password'}
-            </Text>
-          </View>
+        <View className="gap-5">
+          <AuthHeader
+            title="Set a new password"
+            subtitle={
+              user?.mustChangePassword
+                ? 'You signed in with a temporary password. Choose your own before continuing.'
+                : 'Update the password you use to sign in.'
+            }
+          />
 
-          {error && (
-            <View className="rounded-lg bg-red-50 p-3">
-              <Text className="text-sm text-red-700">{error}</Text>
-            </View>
-          )}
+          {error && <Banner tone="danger">{error}</Banner>}
 
           <TextField
             label="Current password"
@@ -73,7 +75,11 @@ export default function ChangePasswordScreen() {
           />
 
           <Button label="Update password" loading={loading} onPress={onSubmit} />
-          <Button label="Log out instead" variant="outline" onPress={signOut} />
+          {user?.mustChangePassword ? (
+            <Button label="Log out instead" variant="ghost" onPress={signOut} />
+          ) : (
+            <Button label="Cancel" variant="ghost" onPress={() => router.back()} />
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
