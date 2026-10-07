@@ -5,6 +5,7 @@
   "description": "School Management System backend (Express + TypeScript + Mongoose + MongoDB)",
   "main": "dist/main.js",
   "scripts": {
+    "prebuild": "npm --prefix ../shared run build",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "dev": "nodemon",
