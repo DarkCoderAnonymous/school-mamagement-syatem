@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { listRegistrations } from '@/lib/api/registrations';
 import type { RegistrationStatus } from '@/lib/api/types';
+import { useRegistrationDecisions } from './registration-decisions';
 
 const STATUS_TABS: { value: RegistrationStatus | 'ALL'; label: string }[] = [
   { value: 'PENDING', label: 'Pending' },
@@ -33,6 +34,7 @@ export default function RegistrationsListPage() {
   const [status, setStatus] = useState<RegistrationStatus | 'ALL'>('PENDING');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const decisions = useRegistrationDecisions();
 
   const query = useQuery({
     queryKey: ['admin', 'registrations', { status, search, page }],
@@ -86,12 +88,13 @@ export default function RegistrationsListPage() {
                   <TableHead>Contact</TableHead>
                   <TableHead>Submitted</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="rows-stagger">
                 {query.data.items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground text-center">
+                    <TableCell colSpan={5} className="text-muted-foreground text-center">
                       No applications found.
                     </TableCell>
                   </TableRow>
@@ -124,6 +127,29 @@ export default function RegistrationsListPage() {
                     <TableCell>
                       <Badge variant={STATUS_VARIANT[reg.status]}>{reg.status}</Badge>
                     </TableCell>
+                    <TableCell className="text-right">
+                      {(reg.status === 'PENDING' || reg.status === 'UNDER_REVIEW') && (
+                        // Buttons act on the row without opening it.
+                        <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            disabled={decisions.isPending(reg._id)}
+                            onClick={() => decisions.approve(reg)}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive"
+                            disabled={decisions.isPending(reg._id)}
+                            onClick={() => decisions.reject(reg)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -150,6 +176,8 @@ export default function RegistrationsListPage() {
           </div>
         </>
       )}
+
+      {decisions.dialogs}
     </div>
   );
 }

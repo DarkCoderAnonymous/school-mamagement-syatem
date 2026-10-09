@@ -67,7 +67,8 @@ export interface School {
 
 export interface ApproveRegistrationResult {
   school: School;
-  tempPassword: string;
+  /** Null when the admin already had an account: their password is left alone. */
+  tempPassword: string | null;
   adminEmail: string;
 }
 
