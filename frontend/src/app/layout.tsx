@@ -5,6 +5,7 @@ import { QueryProvider } from '@/components/providers/query-provider';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { Toaster } from '@/components/ui/sonner';
+import { PRODUCT_NAME, SITE_DESCRIPTION, SITE_TITLE, SITE_URL } from '@/lib/site';
 
 /**
  * Typography (see docs/design-system.md): Inter is the working face — it was
@@ -48,9 +49,20 @@ const display = Newsreader({
   display: 'swap',
 });
 
+/**
+ * Site-wide defaults. Indexing FAILS CLOSED: almost every route is a sign-in
+ * form or the signed-in console, so a page is kept out of search unless it
+ * opts in with `robots: { index: true }` (the home page does) and is listed in
+ * `sitemap.ts`. The share image comes from `opengraph-image.tsx`.
+ */
 export const metadata: Metadata = {
-  title: 'School Management System',
-  description: 'Multi-tenant School Management SaaS',
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_TITLE, template: `%s | ${PRODUCT_NAME}` },
+  description: SITE_DESCRIPTION,
+  applicationName: PRODUCT_NAME,
+  openGraph: { type: 'website', siteName: PRODUCT_NAME, locale: 'en_US' },
+  twitter: { card: 'summary_large_image' },
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

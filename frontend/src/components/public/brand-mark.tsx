@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { GraduationCap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PRODUCT_NAME } from '@/lib/site';
 
-/** Product name in one place so a rename is a one-line change. */
-export const PRODUCT_NAME = 'School Management';
+export { PRODUCT_NAME };
 
 /**
  * Logo mark + wordmark. `hideWordmarkOnMobile` keeps the site header from

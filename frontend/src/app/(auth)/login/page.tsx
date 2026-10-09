@@ -140,14 +140,26 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <div className="text-muted-foreground border-t pt-6 text-sm">
-        New to the platform?{' '}
-        <Link
-          href="/register"
-          className="text-foreground font-medium underline-offset-4 hover:underline"
-        >
-          Register your school
-        </Link>
+      {/* A school still awaiting approval has no login yet, so its applicant lands here too. */}
+      <div className="text-muted-foreground space-y-2 border-t pt-6 text-sm">
+        <p>
+          New to the platform?{' '}
+          <Link
+            href="/register"
+            className="text-foreground font-medium underline-offset-4 hover:underline"
+          >
+            Register your school
+          </Link>
+        </p>
+        <p>
+          Already applied?{' '}
+          <Link
+            href="/register/status"
+            className="text-foreground font-medium underline-offset-4 hover:underline"
+          >
+            Check your application status
+          </Link>
+        </p>
       </div>
     </div>
   );
