@@ -63,6 +63,8 @@ export const metadata: Metadata = {
   openGraph: { type: 'website', siteName: PRODUCT_NAME, locale: 'en_US' },
   twitter: { card: 'summary_large_image' },
   robots: { index: false, follow: false },
+  // Google Search Console ownership (URL-prefix property for https://www.principle.today/).
+  verification: { google: 'sReS6AlR8h5ex5-8PoGxO45RWhWmA_MRRMXJtEaua-o' },
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
