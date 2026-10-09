@@ -16,6 +16,7 @@ const COLORS = {
   muted: '#5c646f', // --muted-foreground
   primary: '#2368bd', // --primary
   teal: '#009690', // --chart-2
+  markEnd: '#0086ab', // <BrandMark> gradient end: --primary mixed 55% into --chart-2
 };
 
 const MODULES = ['Admissions', 'Attendance', 'Fees', 'Exams', 'Payroll'];
@@ -44,7 +45,7 @@ export default function OpengraphImage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundImage: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.teal})`,
+            backgroundImage: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.markEnd})`,
           }}
         >
           {/* lucide GraduationCap, as in <BrandMark>. */}
