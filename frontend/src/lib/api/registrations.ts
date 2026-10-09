@@ -45,6 +45,13 @@ export function approveRegistration(id: string): Promise<ApproveRegistrationResu
   return apiPost(`/admin/registrations/${id}/approve`);
 }
 
+/** A fresh temporary password for an approved school's admin, while they still hold one. */
+export function reissueAdminTempPassword(
+  id: string,
+): Promise<{ adminEmail: string; tempPassword: string }> {
+  return apiPost(`/admin/registrations/${id}/admin-temp-password`);
+}
+
 export function rejectRegistration(id: string, reviewNotes: string): Promise<SchoolRegistration> {
   return apiPost(`/admin/registrations/${id}/reject`, { reviewNotes });
 }

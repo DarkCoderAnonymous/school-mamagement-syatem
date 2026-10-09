@@ -133,6 +133,33 @@ export function RegistrationDetailClient({ id }: { id: string }) {
         </div>
       )}
 
+      {reg.status === 'APPROVED' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>School admin login</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div>
+              <p className="text-muted-foreground">Email</p>
+              <p>{reg.email}</p>
+            </div>
+            <p className="text-muted-foreground">
+              The temporary password was shown once, at approval, and emailed to the admin — it
+              isn&apos;t stored, so it can&apos;t be shown again. If it&apos;s been lost, issue a new one.
+              Once the admin has set their own password, they use &ldquo;Forgot password&rdquo;
+              instead.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => decisions.reissuePassword(reg)}
+              disabled={decisions.isPending(reg._id)}
+            >
+              New temporary password
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {decisions.dialogs}
     </div>
   );

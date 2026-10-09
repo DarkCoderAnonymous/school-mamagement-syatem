@@ -16,26 +16,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { approveRegistration, rejectRegistration } from '@/lib/api/registrations';
+import {
+  approveRegistration,
+  reissueAdminTempPassword,
+  rejectRegistration,
+} from '@/lib/api/registrations';
 import { ApiRequestError } from '@/lib/api/http';
-import type { ApproveRegistrationResult, SchoolRegistration } from '@/lib/api/types';
+import type { SchoolRegistration } from '@/lib/api/types';
 
 type Target = Pick<SchoolRegistration, '_id' | 'schoolName' | 'email'>;
+
+/** What the one-time credentials dialog shows. */
+interface Credentials {
+  title: string;
+  adminEmail: string;
+  /** Null when approval reused an existing account and left its password alone. */
+  tempPassword: string | null;
+}
 
 const errorMessage = (err: unknown) =>
   err instanceof ApiRequestError ? err.message : 'Something went wrong';
 
 /**
- * Approve / reject for the registrations list and the detail page. The state
- * lives with the page, not the row: approving moves a row out of the Pending
- * tab, and the one-time credentials dialog must outlive it.
+ * Approve / reject (and a replacement admin password) for the registrations
+ * list and the detail page. The state lives with the page, not the row:
+ * approving moves a row out of the Pending tab, and the one-time credentials
+ * dialog must outlive it.
  */
 export function useRegistrationDecisions() {
   const queryClient = useQueryClient();
   const [approveTarget, setApproveTarget] = useState<Target | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Target | null>(null);
   const [rejectReason, setRejectReason] = useState('');
-  const [approved, setApproved] = useState<ApproveRegistrationResult | null>(null);
+  const [reissueTarget, setReissueTarget] = useState<Target | null>(null);
+  const [credentials, setCredentials] = useState<Credentials | null>(null);
 
   const invalidate = (id: string) => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'registration', id] });
@@ -46,10 +60,22 @@ export function useRegistrationDecisions() {
     mutationFn: (target: Target) => approveRegistration(target._id),
     onSuccess: (result, target) => {
       setApproveTarget(null);
-      setApproved(result);
+      setCredentials({ title: 'School approved', ...result });
       invalidate(target._id);
     },
     onError: (err) => toast.error(errorMessage(err)),
+  });
+
+  const reissueMutation = useMutation({
+    mutationFn: (target: Target) => reissueAdminTempPassword(target._id),
+    onSuccess: (result) => {
+      setReissueTarget(null);
+      setCredentials({ title: 'New temporary password', ...result });
+    },
+    onError: (err) => {
+      setReissueTarget(null);
+      toast.error(errorMessage(err));
+    },
   });
 
   const rejectMutation = useMutation({
@@ -124,40 +150,59 @@ export function useRegistrationDecisions() {
         </DialogContent>
       </Dialog>
 
-      <ApprovedDialog result={approved} onClose={() => setApproved(null)} />
+      <ConfirmDialog
+        open={!!reissueTarget}
+        onOpenChange={(open) => !open && setReissueTarget(null)}
+        title="Issue a new temporary password?"
+        description={
+          <>
+            The current temporary password stops working, anyone signed in with it is signed out,
+            and the new one is emailed to {reissueTarget?.email}.
+          </>
+        }
+        confirmLabel="Issue new password"
+        pending={reissueMutation.isPending}
+        onConfirm={() => {
+          if (reissueTarget) reissueMutation.mutate(reissueTarget);
+        }}
+      />
+
+      <CredentialsDialog credentials={credentials} onClose={() => setCredentials(null)} />
     </>
   );
 
   return {
     approve: (target: Target) => setApproveTarget(target),
     reject: (target: Target) => setRejectTarget(target),
+    reissuePassword: (target: Target) => setReissueTarget(target),
     /** True while an approve or reject for this registration is in flight. */
     isPending: (id: string) =>
       (approveMutation.isPending && approveMutation.variables?._id === id) ||
-      (rejectMutation.isPending && rejectMutation.variables?.target._id === id),
+      (rejectMutation.isPending && rejectMutation.variables?.target._id === id) ||
+      (reissueMutation.isPending && reissueMutation.variables?._id === id),
     dialogs,
   };
 }
 
 /**
- * The temporary password exists only in this response and the applicant's
- * email — the server stores just its hash — so this is the one chance to see it.
+ * The temporary password exists only in this response and the admin's email —
+ * the server stores just its hash — so this is the one chance to see it.
  */
-function ApprovedDialog({
-  result,
+function CredentialsDialog({
+  credentials: result,
   onClose,
 }: {
-  result: ApproveRegistrationResult | null;
+  credentials: Credentials | null;
   onClose: () => void;
 }) {
   return (
     <Dialog open={!!result} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>School approved</DialogTitle>
+          <DialogTitle>{result?.title}</DialogTitle>
           <DialogDescription>
             {result?.tempPassword
-              ? 'Save these login details now — the password won’t be shown again. They were also emailed to the applicant.'
+              ? 'Save these login details now — the password won’t be shown again. They were also emailed to the school admin.'
               : 'This person already had an account, so their password was left unchanged. They sign in with it and pick this school.'}
           </DialogDescription>
         </DialogHeader>

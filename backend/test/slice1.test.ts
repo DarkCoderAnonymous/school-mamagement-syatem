@@ -142,6 +142,41 @@ describe('Slice 1: registration -> approval -> login', () => {
     expect(second.status).toBe(409);
   });
 
+  it("replaces a lost temporary password, but never one the admin has already changed", async () => {
+    const { registrationId, adminEmail, tempPassword } = await submitAndApprove();
+    const reissue = () =>
+      request(app)
+        .post(`/api/v1/admin/registrations/${registrationId}/admin-temp-password`)
+        .set('Authorization', `Bearer ${superAdminToken}`);
+
+    const res = await reissue().expect(200);
+    const fresh = res.body.data.tempPassword as string;
+    expect(res.body.data.adminEmail).toBe(adminEmail);
+    expect(fresh).not.toBe(tempPassword);
+
+    // The old one stops working; the new one is still a temporary password.
+    await request(app).post('/api/v1/auth/login').send({ email: adminEmail, password: tempPassword }).expect(401);
+    const login = await request(app).post('/api/v1/auth/login').send({ email: adminEmail, password: fresh }).expect(200);
+    expect(login.body.data.user.mustChangePassword).toBe(true);
+    expect(await AuditLog.exists({ action: 'registration.admin-password.reissue' })).toBeTruthy();
+
+    // Once they've chosen their own password it's theirs: the platform can't replace it.
+    await request(app)
+      .post('/api/v1/auth/change-password')
+      .set('Authorization', `Bearer ${login.body.data.accessToken}`)
+      .send({ currentPassword: fresh, newPassword: 'Their-Own-Pass-2026' })
+      .expect(204);
+    expect((await reissue()).status).toBe(409);
+  });
+
+  it('refuses a new temporary password for an application that is not approved', async () => {
+    const submitRes = await request(app).post('/api/v1/registrations').send(uniqueRegistrationPayload()).expect(201);
+    const res = await request(app)
+      .post(`/api/v1/admin/registrations/${submitRes.body.data.id}/admin-temp-password`)
+      .set('Authorization', `Bearer ${superAdminToken}`);
+    expect(res.status).toBe(409);
+  });
+
   it('logs in successfully with the temporary password and flags mustChangePassword', async () => {
     const { adminEmail, tempPassword } = await submitAndApprove();
 

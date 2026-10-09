@@ -30,6 +30,11 @@ export async function approveRegistrationHandler(req: Request, res: Response): P
   ok(res, result);
 }
 
+export async function reissueAdminTempPasswordHandler(req: Request, res: Response): Promise<void> {
+  const result = await service.reissueAdminTempPassword(req.params.id as string, actorMeta(req));
+  ok(res, result);
+}
+
 export async function rejectRegistrationHandler(req: Request, res: Response): Promise<void> {
   const registration = await service.rejectRegistration(
     req.params.id as string,

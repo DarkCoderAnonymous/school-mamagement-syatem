@@ -14,6 +14,7 @@ import { parsePaginationQuery } from '../../../utils/paginate';
 import { generateTempPassword, hashPassword } from '../../../utils/password';
 import { recordAudit } from '../../../utils/audit';
 import { enqueueMail } from '../../../jobs/mailer.queue';
+import { revokeAllSessions } from '../../../services/auth-freshness.service';
 import { ROLE_TEMPLATES, SCHOOL_DEFAULT_ROLES } from '../../../rbac/roleTemplates';
 
 export interface ActorMeta {
@@ -231,6 +232,55 @@ export async function approveRegistration(id: string, actor: ActorMeta) {
   });
 
   return result;
+}
+
+/**
+ * A fresh temporary password for an approved school's admin. The one issued at
+ * approval is never stored (only its hash), so a lost one can't be shown again
+ * — only replaced. Allowed only while the admin still holds a temporary
+ * password: once they've chosen their own, replacing it would hand the
+ * platform their account, so they use Forgot password instead.
+ */
+export async function reissueAdminTempPassword(id: string, actor: ActorMeta) {
+  const registration = await SchoolRegistration.findById(id).lean();
+  if (!registration) throw AppError.notFound('Registration not found');
+  if (registration.status !== 'APPROVED') {
+    throw AppError.conflict('Only an approved application has a school admin account');
+  }
+
+  const user = await User.findOne({ email: registration.email.toLowerCase(), deletedAt: null });
+  if (!user) throw AppError.notFound('The school admin account no longer exists');
+  if (user.platformRoleIds.length > 0 || user.status === 'DISABLED') {
+    throw AppError.conflict('This account cannot be given a temporary password');
+  }
+  if (!user.mustChangePassword) {
+    throw AppError.conflict(
+      'The school admin has already set their own password. They can use "Forgot password" on the sign-in page.',
+    );
+  }
+
+  const tempPassword = generateTempPassword();
+  user.passwordHash = await hashPassword(tempPassword);
+  await user.save();
+  // Anyone signed in with the old temporary password is signed out.
+  await revokeAllSessions(String(user._id));
+
+  await recordAudit({
+    schoolId: registration.schoolId,
+    actorUserId: actor.actorUserId,
+    action: 'registration.admin-password.reissue',
+    entity: 'User',
+    entityId: user._id,
+    ip: actor.ip,
+  });
+
+  await enqueueMail({
+    to: user.email,
+    subject: 'Your new temporary password',
+    body: `Sign in with email ${user.email} and temporary password ${tempPassword}. Any earlier temporary password no longer works. You will be asked to change it on first login.`,
+  });
+
+  return { adminEmail: user.email, tempPassword };
 }
 
 export async function rejectRegistration(id: string, notes: string, actor: ActorMeta) {

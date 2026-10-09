@@ -14,6 +14,7 @@ import {
   approveRegistrationHandler,
   getRegistrationHandler,
   listRegistrationsHandler,
+  reissueAdminTempPasswordHandler,
   rejectRegistrationHandler,
   reviewRegistrationHandler,
 } from './admin-registrations.controller';
@@ -95,6 +96,21 @@ router.post(
   requirePermission(Permission.REGISTRATION_REJECT),
   validate({ params: registrationIdParamsSchema, body: rejectRegistrationSchema }),
   rejectRegistrationHandler,
+);
+
+/**
+ * @openapi
+ * /admin/registrations/{id}/admin-temp-password:
+ *   post:
+ *     summary: Issue a new temporary password for an approved school's admin, while they still hold one (Super Admin)
+ *     tags: [Admin - Registrations]
+ *     security: [{ bearerAuth: [] }]
+ */
+router.post(
+  '/:id/admin-temp-password',
+  requirePermission(Permission.REGISTRATION_APPROVE),
+  validate({ params: registrationIdParamsSchema }),
+  reissueAdminTempPasswordHandler,
 );
 
 export default router;
