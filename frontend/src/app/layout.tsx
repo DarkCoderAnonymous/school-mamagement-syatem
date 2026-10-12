@@ -63,6 +63,15 @@ export const metadata: Metadata = {
   openGraph: { type: 'website', siteName: PRODUCT_NAME, locale: 'en_US' },
   twitter: { card: 'summary_large_image' },
   robots: { index: false, follow: false },
+  // Served from public/ at fixed URLs, not the app/ icon convention: that appends a
+  // per-build hash, and Google's favicon crawler wants a URL that doesn't change.
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '48x48', type: 'image/x-icon' },
+      { url: '/icon.svg', sizes: 'any', type: 'image/svg+xml' },
+    ],
+    apple: { url: '/apple-icon.png', sizes: '180x180', type: 'image/png' },
+  },
   // Google Search Console ownership (URL-prefix property for https://www.principle.today/).
   verification: { google: 'sReS6AlR8h5ex5-8PoGxO45RWhWmA_MRRMXJtEaua-o' },
 };
